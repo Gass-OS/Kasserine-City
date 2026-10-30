@@ -64,7 +64,7 @@ jobs:
           GODOT_ANDROID_KEYSTORE_DEBUG_PATH="$HOME/.android/debug.keystore" \
           GODOT_ANDROID_KEYSTORE_DEBUG_USER="androiddebugkey" \
           GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD="android" \
-            godot --headless --path . --export-debug Android build/KasserineCity.apk
+            godot --verbose --headless --path . --export-debug Android build/KasserineCity.apk
           test -s build/KasserineCity.apk
 
       - name: Upload APK
