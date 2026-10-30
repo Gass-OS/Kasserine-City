@@ -48,7 +48,7 @@ jobs:
             echo '[resource]'
             printf 'export/android/android_sdk_path = "%s"\n' "$ANDROID_HOME"
             printf 'export/android/java_sdk_path = "%s"\n' "$JAVA_HOME_REAL"
-          } > "$HOME/.config/godot/editor_settings-4.tres"
+          } > "$HOME/.config/godot/editor_settings-4.4.tres"
 
       - name: Import project and validate scripts
         run: godot --headless --editor --path . --quit
