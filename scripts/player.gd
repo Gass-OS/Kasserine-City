@@ -60,16 +60,23 @@ func _ready():
     collider.position.y = 0.9
     add_child(collider)
 
-    var character = MeshInstance3D.new()
-    var body_mesh = CapsuleMesh.new()
-    body_mesh.radius = 0.42
-    body_mesh.height = 1.8
-    character.mesh = body_mesh
-    character.position.y = 0.9
-    var skin = StandardMaterial3D.new()
-    skin.albedo_color = Color(0.85, 0.48, 0.25)
-    character.material_override = skin
-    add_child(character)
+    var character_model = preload("res://scripts/character_model.gd")
+    var character = character_model.build(3)
+    if character != null:
+        character.name = "PlayerCharacter"
+        add_child(character)
+    else:
+        var fallback = MeshInstance3D.new()
+        var body_mesh = CapsuleMesh.new()
+        body_mesh.radius = 0.42
+        body_mesh.height = 1.8
+        fallback.mesh = body_mesh
+        fallback.position.y = 0.9
+        var fallback_material = StandardMaterial3D.new()
+        fallback_material.albedo_color = Color(0.85, 0.48, 0.25)
+        fallback.material_override = fallback_material
+        add_child(fallback)
+
 
     camera_pivot = Node3D.new()
     camera_pivot.position.y = 1.4

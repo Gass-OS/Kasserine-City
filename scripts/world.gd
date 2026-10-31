@@ -1,6 +1,7 @@
 extends Node3D
 
 const PlayerScript = preload("res://scripts/player.gd")
+const CharacterModel = preload("res://scripts/character_model.gd")
 
 func _ready():
     _create_environment()
@@ -134,6 +135,14 @@ func _create_people():
     _landmark("GARAGE", Vector3(24, 3, 0))
 
 func _human(root: Node3D, index: int):
+    var model = CharacterModel.build(index)
+    if model != null:
+        root.add_child(model)
+        return
+    _human_fallback(root, index)
+
+
+func _human_fallback(root: Node3D, index: int):
     var shirt_colors = [
         Color(0.18, 0.45, 0.8),
         Color(0.8, 0.25, 0.2),
