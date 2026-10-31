@@ -10,6 +10,11 @@ func _ready():
     player.name = "Player"
     add_child(player)
     player.position = Vector3(0, 1, 12)
+    _create_people()
+    var gameplay = Node.new()
+    gameplay.name = "Gameplay"
+    gameplay.set_script(preload("res://scripts/gameplay.gd"))
+    add_child(gameplay)
 
 func _create_environment():
     var env = Environment.new()
@@ -91,3 +96,65 @@ func _create_city():
     sign.position = Vector3(0, 7, -28)
     sign.modulate = Color(1.0, 0.83, 0.35)
     add_child(sign)
+
+
+var citizens: Array[Node3D] = []
+
+func _create_people():
+    var places = [
+        Vector3(3, 0, 7),
+        Vector3(-7, 0, 9),
+        Vector3(8, 0, -8),
+        Vector3(-10, 0, -12),
+        Vector3(14, 0, 12),
+        Vector3(-15, 0, 15),
+        Vector3(20, 0, -13),
+        Vector3(-19, 0, -19),
+        Vector3(6, 0, -22),
+        Vector3(-6, 0, 22)
+    ]
+    for i in range(places.size()):
+        var person = Node3D.new()
+        person.name = "Citizen_%02d" % i
+        person.position = places[i]
+        add_child(person)
+        citizens.append(person)
+        _human(person, i)
+
+    var guide = Label3D.new()
+    guide.text = "AMINE - MISSIONS"
+    guide.font_size = 36
+    guide.position = Vector3(0, 2.5, 0)
+    guide.modulate = Color.YELLOW
+    citizens[0].add_child(guide)
+
+    _landmark("MARKET", Vector3(-24, 3, 0))
+    _landmark("GARAGE", Vector3(24, 3, 0))
+
+func _human(root: Node3D, index: int):
+    var shirt_colors = [
+        Color(0.18, 0.45, 0.8),
+        Color(0.8, 0.25, 0.2),
+        Color(0.15, 0.55, 0.35),
+        Color(0.75, 0.65, 0.25)
+    ]
+    var shirt = shirt_colors[index % shirt_colors.size()]
+    var skin = Color(0.68, 0.43, 0.28)
+    _box(root, Vector3(0.65, 0.8, 0.34), Vector3(0, 1.25, 0), shirt)
+    _box(root, Vector3(0.34, 0.34, 0.34), Vector3(0, 1.87, 0), skin)
+    _box(root, Vector3(0.22, 0.65, 0.23), Vector3(-0.48, 1.22, 0), skin)
+    _box(root, Vector3(0.22, 0.65, 0.23), Vector3(0.48, 1.22, 0), skin)
+    var trousers = Color(0.13, 0.16, 0.23)
+    _box(root, Vector3(0.24, 0.75, 0.28), Vector3(-0.19, 0.45, 0), trousers)
+    _box(root, Vector3(0.24, 0.75, 0.28), Vector3(0.19, 0.45, 0), trousers)
+
+func _landmark(title: String, pos: Vector3):
+    var sign = Label3D.new()
+    sign.text = title
+    sign.font_size = 48
+    sign.position = pos
+    sign.modulate = Color(1, 0.85, 0.25)
+    add_child(sign)
+
+func interact():
+    get_node("Gameplay").interact()

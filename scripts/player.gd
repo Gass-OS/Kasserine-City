@@ -23,6 +23,7 @@ var hud: TouchHUD
 var status_label: Label
 
 class TouchHUD extends Control:
+    var joystick_vector := Vector2.ZERO
     func _notification(what):
         if what == NOTIFICATION_RESIZED:
             queue_redraw()
@@ -36,7 +37,7 @@ class TouchHUD extends Control:
 
         draw_circle(joy, 62, Color(0.03, 0.06, 0.10, 0.48))
         draw_arc(joy, 62, 0.0, TAU, 48, Color(0.85, 0.91, 1.0, 0.8), 3.0)
-        draw_circle(joy + get_parent().touch_move * 40.0, 25,
+        draw_circle(joy + joystick_vector * 40.0, 25,
             Color(0.60, 0.78, 0.96, 0.85))
 
         _button(jump, 39, "JUMP", Color(0.15, 0.65, 0.34, 0.82))
@@ -101,6 +102,7 @@ func _ready():
 
 func _refresh_hud():
     if is_instance_valid(hud):
+        hud.joystick_vector = touch_move
         hud.queue_redraw()
 
 func _point(action: String) -> Vector2:
@@ -126,17 +128,20 @@ func _input(event):
             if jump_touch == -1 and _near(event.position, _point("jump"), 48):
                 jump_touch = event.index
                 jump_requested = true
+                hud.joystick_vector = touch_move
                 hud.queue_redraw()
             elif sprint_touch == -1 and _near(event.position, _point("sprint"), 44):
                 sprint_touch = event.index
+                hud.joystick_vector = touch_move
                 hud.queue_redraw()
             elif interact_touch == -1 and _near(event.position, _point("interact"), 44):
                 interact_touch = event.index
-                _show_message("Nothing to interact with nearby yet")
+                get_parent().interact()
             elif move_touch == -1 and _near(event.position, _point("move"), 82):
                 move_touch = event.index
                 move_origin = event.position
                 touch_move = Vector2.ZERO
+                hud.joystick_vector = touch_move
                 hud.queue_redraw()
             elif look_touch == -1 and event.position.x > s.x * 0.42 \
                     and event.position.y < s.y - 255:
@@ -145,6 +150,7 @@ func _input(event):
             if event.index == move_touch:
                 move_touch = -1
                 touch_move = Vector2.ZERO
+                hud.joystick_vector = touch_move
                 hud.queue_redraw()
             if event.index == look_touch:
                 look_touch = -1
@@ -162,6 +168,7 @@ func _input(event):
                 clamp(delta.x, -1.0, 1.0),
                 clamp(delta.y, -1.0, 1.0)
             )
+            hud.joystick_vector = touch_move
             hud.queue_redraw()
         elif event.index == look_touch:
             yaw -= event.relative.x * LOOK_SENSITIVITY
