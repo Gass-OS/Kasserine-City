@@ -102,6 +102,7 @@ func _show_main() -> void:
 	v.add_child(_label(Settings.t("subtitle"), 22, Color(0.85, 0.9, 1.0)))
 	v.add_child(Control.new())
 	v.add_child(_button(Settings.t("play"), _on_play))
+	v.add_child(_button("STORY / HISTORY", _show_story))
 	v.add_child(_button(Settings.t("settings"), _show_settings))
 	v.add_child(_button(Settings.t("quit"), func(): get_tree().quit()))
 	v.modulate.a = 0.0
@@ -109,6 +110,40 @@ func _show_main() -> void:
 
 func _on_play() -> void:
 	get_tree().change_scene_to_file("res://main.tscn")
+
+func _show_story() -> void:
+        _clear()
+
+        # Keep the story readable on smaller screens and allow vertical scrolling.
+        var scroll := ScrollContainer.new()
+        scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+        scroll.offset_left = 24.0
+        scroll.offset_top = 24.0
+        scroll.offset_right = -24.0
+        scroll.offset_bottom = -24.0
+        scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+        ui.add_child(scroll)
+
+        var v := VBoxContainer.new()
+        v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        v.custom_minimum_size = Vector2(
+                minf(760.0, maxf(280.0, get_viewport_rect().size.x - 48.0)), 0.0)
+        v.add_theme_constant_override("separation", 14)
+        scroll.add_child(v)
+
+        v.add_child(_label("KASSERINE • WESTERN TUNISIA", 34, Color(1, 0.82, 0.48)))
+
+        var story := _label(
+                "THE PLACE\nKasserine lies in western Tunisia among the highlands and mountain landscapes of the country's interior.\n\n"
+                + "THE HISTORY\nThe wider region carries traces of ancient North African and Roman-era life. In February 1943, the Kasserine Pass became the site of a major World War II battle.\n\n"
+                + "YOUR STORY\nThis game is a fictionalized modern city inspired by Kasserine. Meet residents, explore the market and garage, and discover everyday life.",
+                19, Color(0.91, 0.93, 0.98))
+        story.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        story.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+        story.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        v.add_child(story)
+
+        v.add_child(_button("BACK TO MAIN MENU", _show_main))
 
 func _row(parent: Control, key: String, slider_min: float, slider_max: float, step: float, value: float, cb: Callable) -> void:
 	parent.add_child(_label(Settings.t(key), 22))
