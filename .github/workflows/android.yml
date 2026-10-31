@@ -2,7 +2,7 @@ name: Kasserine City Android APK
 
 on:
   push:
-    branches: [main, cinematic-living-city]
+    branches: [main, cinematic-living-city, aaa-city-upgrade]
   workflow_dispatch:
 
 permissions:

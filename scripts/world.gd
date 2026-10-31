@@ -20,21 +20,45 @@ func _ready():
     add_child(gameplay)
 
 func _create_environment():
+    # Cinematic Mediterranean sky, tuned for the existing Android renderer.
     var env = Environment.new()
-    env.background_mode = Environment.BG_COLOR
-    env.background_color = Color(0.48, 0.70, 0.88)
-    env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-    env.ambient_light_color = Color(0.78, 0.82, 0.9)
-    env.ambient_light_energy = 0.8
+    env.background_mode = Environment.BG_SKY
+
+    var sky = Sky.new()
+    var sky_material = ProceduralSkyMaterial.new()
+    sky_material.sky_top_color = Color(0.12, 0.29, 0.52)
+    sky_material.sky_horizon_color = Color(0.72, 0.78, 0.82)
+    sky_material.ground_bottom_color = Color(0.24, 0.21, 0.17)
+    sky_material.ground_horizon_color = Color(0.68, 0.62, 0.51)
+    sky_material.sun_angle_max = 18.0
+    sky.sky_material = sky_material
+    env.sky = sky
+    env.background_energy_multiplier = 1.0
+
+    env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
+    env.ambient_light_color = Color(0.82, 0.85, 0.92)
+    env.ambient_light_energy = 0.75
+
+    # Gentle atmospheric depth without expensive screen-space effects.
+    env.fog_enabled = true
+    env.fog_light_color = Color(0.66, 0.74, 0.81)
+    env.fog_density = 0.0012
+
+    env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+    env.tonemap_exposure = 1.0
 
     var world = WorldEnvironment.new()
+    world.name = "CinematicWorldEnvironment"
     world.environment = env
     add_child(world)
 
     var sun = DirectionalLight3D.new()
+    sun.name = "MediterraneanSun"
     sun.rotation_degrees = Vector3(-48, -32, 0)
+    sun.light_color = Color(1.0, 0.92, 0.80)
     sun.light_energy = 1.2
     sun.shadow_enabled = true
+    sun.directional_shadow_max_distance = 90.0
     add_child(sun)
 
 func _box(parent: Node3D, size: Vector3, pos: Vector3, color: Color, solid := false):
@@ -44,6 +68,8 @@ func _box(parent: Node3D, size: Vector3, pos: Vector3, color: Color, solid := fa
     mesh_instance.mesh = mesh
     var material = StandardMaterial3D.new()
     material.albedo_color = color
+    material.roughness = 0.88
+    material.metallic = 0.0
     mesh_instance.material_override = material
     mesh_instance.position = pos
     parent.add_child(mesh_instance)
@@ -615,7 +641,7 @@ func _create_street_lamp(pos: Vector3):
     pool.rotation_degrees.x = -90
     pool.position = Vector3(0.85, 0.22, 0)
     pool.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-    pool.free()
+    # Keep the additive ground-light quad alive for rendering.
 
 func _car_mesh(car: Node3D, mesh: Mesh, pos: Vector3, mat: Material, rot_y := 0.0) -> MeshInstance3D:
     var mi := MeshInstance3D.new()
