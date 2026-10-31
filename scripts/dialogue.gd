@@ -1,6 +1,12 @@
 extends Node
 
 const PAIRS = [
+    ["واش حوالك الخو؟", "لاباس الحمد لله، وإنت؟"],
+    ["أهلا بيك، خويا الباهي!", "ربي يعيشك، نهارك زين."],
+    ["شنوّة صاير في الحومة؟", "فما حركة كبيرة اليوم في السوق."],
+    ["وين ماشي يا صاحبي؟", "ماشي للقهوة، تلقاني غادي."],
+    ["يعطيك الصحة على المعاونة.", "بالسلامة خويا، ربي معاك."],
+    ["القهوة عامرة اليوم؟", "إي، الناس الكلّ قاعدة تحكي على الماتش."],
     ["Aslema! Chnowa ahwelek?", "Labes, hamdoullah! And you?"],
     ["Are you going to the market?", "Yes, I need fresh dates and bread."],
     ["Did you see the new cars?", "Wallah, they are beautiful!"],

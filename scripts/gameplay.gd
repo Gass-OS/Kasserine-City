@@ -237,6 +237,9 @@ func interact():
         return
 
     if nearest != null and nearest_distance < 4.5:
+        var services = world.get_node_or_null("PoliceServices")
+        if services != null and services.call("interact", nearest):
+            return
         var line = CITIZEN_LINES[randi() % CITIZEN_LINES.size()]
         _notice("Citizen: " + line)
         _speak(line)

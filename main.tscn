@@ -15,6 +15,7 @@
 [ext_resource type="Script" path="res://scripts/drive.gd" id="13"]
 [ext_resource type="Script" path="res://scripts/incidents.gd" id="14"]
 [ext_resource type="Script" path="res://scripts/weather.gd" id="15"]
+[ext_resource type="Script" path="res://scripts/police_services.gd" id="16"]
 
 [node name="KasserineCity" type="Node3D"]
 script = ExtResource("1")
@@ -60,3 +61,6 @@ script = ExtResource("14")
 
 [node name="Weather" type="Node" parent="."]
 script = ExtResource("15")
+
+[node name="PoliceServices" type="Node" parent="."]
+script = ExtResource("16")
