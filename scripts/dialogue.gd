@@ -118,9 +118,34 @@ func _say(c: Node3D, text: String, hold: float) -> void:
     await get_tree().create_timer(hold).timeout
     root.visible = false
 
-func _converse(a: Node3D, b: Node3D, lines: Array) -> void:
+func _converse_old(a: Node3D, b: Node3D, lines: Array) -> void:
     busy = true
     await _say(a, lines[0], 1.6)
     await _say(b, lines[1], 1.6)
+    busy = false
+    timer = randf_range(5.0, 11.0)
+
+func _face(a: Node3D, b: Node3D) -> void:
+    var d := b.position - a.position
+    d.y = 0.0
+    if d.length() > 0.01:
+        a.rotation.y = atan2(-d.x, -d.z)
+
+func _converse(a: Node3D, b: Node3D, lines: Array) -> void:
+    busy = true
+    var cw = world.get("citizen_waits")
+    var cs = world.get("citizens")
+    var ia: int = cs.find(a) if cs != null else -1
+    var ib: int = cs.find(b) if cs != null else -1
+    if cw != null:
+        if ia >= 0: cw[ia] = 90.0
+        if ib >= 0: cw[ib] = 90.0
+    _face(a, b)
+    _face(b, a)
+    await _say(a, lines[0], 1.6)
+    await _say(b, lines[1], 1.6)
+    if cw != null:
+        if ia >= 0: cw[ia] = 0.8
+        if ib >= 0: cw[ib] = 0.8
     busy = false
     timer = randf_range(5.0, 11.0)

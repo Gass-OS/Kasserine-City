@@ -149,6 +149,12 @@ func _create_interface():
     exit_button.pressed.connect(_exit_game)
     actions.add_child(exit_button)
 
+    var to_menu = Button.new()
+    to_menu.text = "MAIN MENU"
+    to_menu.custom_minimum_size = Vector2(110, 48)
+    to_menu.pressed.connect(_to_main_menu)
+    actions.add_child(to_menu)
+
 func _open(title: String):
     panel.visible = true
     get_tree().paused = true
@@ -272,3 +278,7 @@ func _process(delta):
 
 func _add_speech_bubbles():
     pass
+
+func _to_main_menu():
+    get_tree().paused = false
+    get_tree().change_scene_to_file("res://menu.tscn")

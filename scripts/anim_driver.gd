@@ -14,7 +14,7 @@ func _ready() -> void:
     layer.layer = 20
     add_child(layer)
     label = Label.new()
-    label.position = Vector2(20, 48)
+    label.position = Vector2(20, 270)
     label.add_theme_font_size_override("font_size", 16)
     label.add_theme_constant_override("outline_size", 5)
     label.add_theme_color_override("font_outline_color", Color.BLACK)
