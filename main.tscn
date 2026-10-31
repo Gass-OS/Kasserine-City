@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=16 format=3]
 
 [ext_resource type="Script" path="res://scripts/world.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/daynight.gd" id="2"]
@@ -10,6 +10,11 @@
 [ext_resource type="Script" path="res://scripts/citizen_ai.gd" id="8"]
 [ext_resource type="Script" path="res://scripts/life.gd" id="9"]
 [ext_resource type="Script" path="res://scripts/hud_plus.gd" id="10"]
+[ext_resource type="Script" path="res://scripts/radio.gd" id="11"]
+[ext_resource type="Script" path="res://scripts/crime.gd" id="12"]
+[ext_resource type="Script" path="res://scripts/drive.gd" id="13"]
+[ext_resource type="Script" path="res://scripts/incidents.gd" id="14"]
+[ext_resource type="Script" path="res://scripts/weather.gd" id="15"]
 
 [node name="KasserineCity" type="Node3D"]
 script = ExtResource("1")
@@ -40,3 +45,18 @@ script = ExtResource("9")
 
 [node name="HudPlus" type="Node" parent="."]
 script = ExtResource("10")
+
+[node name="Radio" type="Node" parent="."]
+script = ExtResource("11")
+
+[node name="Crime" type="Node" parent="."]
+script = ExtResource("12")
+
+[node name="Drive" type="Node" parent="."]
+script = ExtResource("13")
+
+[node name="Incidents" type="Node" parent="."]
+script = ExtResource("14")
+
+[node name="Weather" type="Node" parent="."]
+script = ExtResource("15")

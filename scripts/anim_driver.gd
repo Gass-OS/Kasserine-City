@@ -31,6 +31,8 @@ func _bodies() -> Array:
     if cs != null:
         for c in cs:
             out.append(c)
+    for g in get_tree().get_nodes_in_group("anim_body"):
+        out.append(g)
     return out
 
 func _model_of(n: Node) -> Node3D:
@@ -67,7 +69,7 @@ func _process(delta: float) -> void:
                 want = "jump"
             elif s > 0.35 and ap.has_animation("run"):
                 want = "run"
-                spd = clampf(s / 6.0, 0.35, 1.5)
+                spd = clampf(s / 4.5, 0.6, 1.6)
             if ap.current_animation != want and ap.has_animation(want):
                 ap.play(want, 0.2)
             ap.speed_scale = spd
@@ -81,7 +83,7 @@ func _process(delta: float) -> void:
                 m.position.y = lerpf(m.position.y, 0.0, 0.2)
                 m.rotation.z = lerpf(m.rotation.z, 0.0, 0.2)
     if label != null:
-        if shown < 45.0:
+        if shown < 20.0:
             var pl := world.get_node_or_null("Player")
             var pm := _model_of(pl) if pl else null
             label.text = "Animation: " + (str(pm.get_meta("anim_status", "?")) if pm else "no player model")

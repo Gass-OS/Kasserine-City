@@ -1,0 +1,126 @@
+extends RefCounted
+
+const RATE := 22050
+static var _cache := {}
+
+static func _pack(data: PackedByteArray, loop: bool) -> AudioStreamWAV:
+    var w := AudioStreamWAV.new()
+    w.format = AudioStreamWAV.FORMAT_16_BITS
+    w.mix_rate = RATE
+    w.stereo = false
+    w.data = data
+    if loop:
+        w.loop_mode = AudioStreamWAV.LOOP_FORWARD
+        w.loop_begin = 0
+        w.loop_end = int(data.size() * 0.5)
+    return w
+
+static func tone(f0: float, f1: float, dur: float, vol: float, noise: float) -> AudioStreamWAV:
+    var n := int(dur * float(RATE))
+    var data := PackedByteArray()
+    data.resize(n * 2)
+    var ph := 0.0
+    for i in range(n):
+        var t := float(i) / float(n)
+        ph += TAU * lerpf(f0, f1, t) / float(RATE)
+        var s := sin(ph) * (1.0 - noise) + (randf() * 2.0 - 1.0) * noise
+        var env := minf(1.0, t * 30.0) * minf(1.0, (1.0 - t) * 12.0)
+        data.encode_s16(i * 2, int(clampf(s * env * vol, -1.0, 1.0) * 32767.0))
+    return _pack(data, false)
+
+static func _noise_burst(dur: float, vol: float, decay: float, smooth: float) -> AudioStreamWAV:
+    var n := int(dur * float(RATE))
+    var data := PackedByteArray()
+    data.resize(n * 2)
+    var prev := 0.0
+    for i in range(n):
+        var t := float(i) / float(n)
+        prev = prev * smooth + (randf() * 2.0 - 1.0) * (1.0 - smooth)
+        var env := exp(-t * decay) * minf(1.0, t * 40.0)
+        data.encode_s16(i * 2, int(clampf(prev * env * vol, -1.0, 1.0) * 32767.0))
+    return _pack(data, false)
+
+static func _noise_loop(dur: float, vol: float, smooth: float) -> AudioStreamWAV:
+    var n := int(dur * float(RATE))
+    var data := PackedByteArray()
+    data.resize(n * 2)
+    var prev := 0.0
+    for i in range(n):
+        prev = prev * smooth + (randf() * 2.0 - 1.0) * (1.0 - smooth)
+        data.encode_s16(i * 2, int(clampf(prev * vol, -1.0, 1.0) * 32767.0))
+    return _pack(data, true)
+
+static func _crash() -> AudioStreamWAV:
+    var n := int(0.8 * float(RATE))
+    var data := PackedByteArray()
+    data.resize(n * 2)
+    for i in range(n):
+        var t := float(i) / float(n)
+        var thump := sin(TAU * 62.0 * float(i) / float(RATE)) * exp(-t * 7.0) * 0.7
+        var nz := (randf() * 2.0 - 1.0) * exp(-t * 5.0) * 0.8
+        data.encode_s16(i * 2, int(clampf((thump + nz) * 0.8, -1.0, 1.0) * 32767.0))
+    return _pack(data, false)
+
+static func _engine() -> AudioStreamWAV:
+    var n := int(0.4 * float(RATE))
+    var data := PackedByteArray()
+    data.resize(n * 2)
+    for i in range(n):
+        var t := float(i) / float(RATE)
+        var s := sin(TAU * 50.0 * t) * 0.5 + sin(TAU * 100.0 * t) * 0.28 + sin(TAU * 150.0 * t) * 0.14 + (randf() * 2.0 - 1.0) * 0.05
+        data.encode_s16(i * 2, int(clampf(s * 0.6, -1.0, 1.0) * 32767.0))
+    return _pack(data, true)
+
+static func _siren() -> AudioStreamWAV:
+    var n := int(1.6 * float(RATE))
+    var data := PackedByteArray()
+    data.resize(n * 2)
+    var ph := 0.0
+    for i in range(n):
+        var t := float(i) / float(n)
+        var f := 620.0 + 480.0 * (0.5 - 0.5 * cos(TAU * t))
+        ph += TAU * f / float(RATE)
+        var s := sin(ph) * 0.5 + sin(ph * 2.0) * 0.12
+        data.encode_s16(i * 2, int(clampf(s, -1.0, 1.0) * 32767.0))
+    return _pack(data, true)
+
+static func get_sound(n: String) -> AudioStreamWAV:
+    if _cache.has(n):
+        return _cache[n]
+    var s: AudioStreamWAV
+    match n:
+        "squelch":
+            s = _noise_burst(0.14, 0.5, 5.0, 0.0)
+        "beep":
+            s = tone(1250.0, 1250.0, 0.08, 0.3, 0.0)
+        "roger":
+            s = tone(900.0, 1400.0, 0.12, 0.3, 0.0)
+        "click":
+            s = tone(2200.0, 700.0, 0.07, 0.5, 0.2)
+        "whistle":
+            s = tone(2100.0, 2700.0, 0.45, 0.35, 0.0)
+        "crash":
+            s = _crash()
+        "thunder":
+            s = _noise_burst(3.0, 8.0, 1.5, 0.985)
+        "rain":
+            s = _noise_loop(2.0, 1.1, 0.55)
+        "wind":
+            s = _noise_loop(2.5, 4.0, 0.95)
+        "engine":
+            s = _engine()
+        "siren":
+            s = _siren()
+        _:
+            s = tone(800.0, 800.0, 0.1, 0.2, 0.0)
+    _cache[n] = s
+    return s
+
+static func play(parent: Node, n: String, vol_db: float) -> AudioStreamPlayer:
+    var p := AudioStreamPlayer.new()
+    p.stream = get_sound(n)
+    p.volume_db = vol_db
+    parent.add_child(p)
+    p.finished.connect(p.queue_free)
+    p.play()
+    return p

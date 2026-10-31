@@ -15,6 +15,8 @@ class Mini extends Control:
         return Vector2(d.x * cs - d.y * sn, d.x * sn + d.y * cs) * (R / RANGE)
 
     func _target() -> Variant:
+        if world != null and world.has_meta("radar_target"):
+            return world.get_meta("radar_target")
         if gp == null:
             return null
         var m := int(gp.mission)
