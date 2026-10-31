@@ -1,18 +1,32 @@
 extends CanvasLayer
 
-# Additive opening cinematic. Existing menu/gameplay remain intact; intro can be skipped.
+# Additive boot + story cinematic. Existing menu, world, missions and controls stay intact.
+# Lightweight UI animation for Android; player can skip at any time.
 var overlay: Control
 var shade: ColorRect
 var card: VBoxContainer
 var eyebrow: Label
 var headline: Label
 var description: Label
+var boot_box: VBoxContainer
+var boot_status: Label
+var boot_progress: ProgressBar
 var finished := false
 
+const BOOT_LINES := [
+    "GASS-OS • KASSERINE CITY",
+    "Checking city systems ........ OK",
+    "Loading streets and districts .. OK",
+    "Preparing traffic and citizens . OK",
+    "Radio network .................. ONLINE",
+    "Officer Amar ................... ON DUTY"
+]
+
 const CARDS := [
-    {"eyebrow": "GASS-OS ORIGINAL • TUNISIA", "title": "THE WEST AWAKENS", "body": "Beneath the mountains of western Tunisia, a new day begins."},
-    {"eyebrow": "KASSERINE • A LAND WITH MEMORY", "title": "HISTORY LIVES HERE", "body": "The wider region carries traces of ancient North African and Roman-era life. In February 1943, the Kasserine Pass became the site of a major World War II battle."},
-    {"eyebrow": "YOUR STORY STARTS HERE", "title": "WELCOME TO KASSERINE", "body": "Meet the people. Explore the market. Discover the stories of everyday life."}
+    {"eyebrow": "WESTERN TUNISIA • 06:12 AM", "title": "A CITY WAKES", "body": "Sunrise touches the mountains around Kasserine. Shop shutters rise, engines start, and the streets slowly come alive."},
+    {"eyebrow": "MEET YOUR OFFICER", "title": "AMAR IS ON DUTY", "body": "Amar wakes before the city gets busy. He puts on his uniform, checks his equipment, and prepares for another unpredictable day on the roads."},
+    {"eyebrow": "RADIO ALERT • DISPATCH", "title": "WE HAVE A PROBLEM", "body": "A call breaks the morning quiet. Traffic is building, residents need help, and another incident has been reported nearby. Amar heads out."},
+    {"eyebrow": "YOUR SHIFT STARTS NOW", "title": "KASSERINE NEEDS YOU", "body": "Patrol the streets, respond to local problems, help people, and discover the lives behind every doorway. Every shift can bring a different story."}
 ]
 
 func _ready() -> void:
@@ -25,6 +39,7 @@ func _build() -> void:
     overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     overlay.mouse_filter = Control.MOUSE_FILTER_STOP
     add_child(overlay)
+
     shade = ColorRect.new()
     shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     shade.color = Color(0.012, 0.018, 0.035, 1.0)
@@ -33,14 +48,15 @@ func _build() -> void:
     var top_bar := ColorRect.new()
     top_bar.color = Color.BLACK
     top_bar.anchor_right = 1.0
-    top_bar.offset_bottom = 36.0
+    top_bar.offset_bottom = 30.0
     overlay.add_child(top_bar)
+
     var bottom_bar := ColorRect.new()
     bottom_bar.color = Color.BLACK
     bottom_bar.anchor_top = 1.0
     bottom_bar.anchor_right = 1.0
     bottom_bar.anchor_bottom = 1.0
-    bottom_bar.offset_top = -36.0
+    bottom_bar.offset_top = -30.0
     overlay.add_child(bottom_bar)
 
     var center := CenterContainer.new()
@@ -48,14 +64,35 @@ func _build() -> void:
     center.offset_left = 24.0
     center.offset_right = -24.0
     overlay.add_child(center)
+
+    var stack := VBoxContainer.new()
+    stack.add_theme_constant_override("separation", 22)
+    stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    center.add_child(stack)
+
+    boot_box = VBoxContainer.new()
+    boot_box.add_theme_constant_override("separation", 10)
+    stack.add_child(boot_box)
+    boot_box.add_child(_label("GASS-OS", 22, Color(0.62, 0.78, 1.0)))
+    boot_status = _label("INITIALIZING KASSERINE CITY", 25, Color(1.0, 0.84, 0.50))
+    boot_box.add_child(boot_status)
+
+    boot_progress = ProgressBar.new()
+    boot_progress.custom_minimum_size = Vector2(0, 12)
+    boot_progress.min_value = 0.0
+    boot_progress.max_value = float(BOOT_LINES.size())
+    boot_progress.value = 0.0
+    boot_progress.show_percentage = false
+    boot_box.add_child(boot_progress)
+
     card = VBoxContainer.new()
     card.add_theme_constant_override("separation", 18)
     card.modulate.a = 0.0
-    center.add_child(card)
+    stack.add_child(card)
     eyebrow = _label("", 16, Color(1.0, 0.56, 0.30))
-    headline = _label("", 46, Color(1.0, 0.84, 0.50))
-    description = _label("", 22, Color(0.91, 0.93, 0.98))
-    description.custom_minimum_size = Vector2(0, 100)
+    headline = _label("", 42, Color(1.0, 0.84, 0.50))
+    description = _label("", 21, Color(0.91, 0.93, 0.98))
+    description.custom_minimum_size = Vector2(0, 110)
     card.add_child(eyebrow)
     card.add_child(headline)
     card.add_child(description)
@@ -66,16 +103,17 @@ func _build() -> void:
     skip.anchor_right = 1.0
     skip.offset_left = -184.0
     skip.offset_right = -18.0
-    skip.offset_top = 48.0
-    skip.offset_bottom = 96.0
+    skip.offset_top = 42.0
+    skip.offset_bottom = 88.0
     skip.custom_minimum_size = Vector2(166, 44)
     skip.pressed.connect(_finish)
     overlay.add_child(skip)
-    var footer := _label("KASSERINE CITY  •  A WORLD IN PROGRESS", 12, Color(0.75, 0.78, 0.85))
+
+    var footer := _label("KASSERINE CITY  •  AN OPEN-WORLD STORY", 12, Color(0.75, 0.78, 0.85))
     footer.anchor_top = 1.0
     footer.anchor_bottom = 1.0
-    footer.offset_top = -31.0
-    footer.offset_bottom = -8.0
+    footer.offset_top = -27.0
+    footer.offset_bottom = -6.0
     overlay.add_child(footer)
 
 func _label(value: String, font_size: int, tint: Color) -> Label:
@@ -92,48 +130,70 @@ func _label(value: String, font_size: int, tint: Color) -> Label:
 
 func _run_intro() -> void:
     var fade := create_tween()
-    fade.tween_property(shade, "color:a", 0.42, 0.9)
+    fade.tween_property(shade, "color:a", 0.12, 0.7)
     await fade.finished
-    if finished: return
+    if finished:
+        return
+
+    for i in range(BOOT_LINES.size()):
+        if finished:
+            return
+        boot_status.text = BOOT_LINES[i]
+        boot_progress.value = i + 1
+        await get_tree().create_timer(0.30).timeout
+
+    await get_tree().create_timer(0.25).timeout
+    if finished:
+        return
+    boot_box.hide()
     _narrate()
+
     for i in range(CARDS.size()):
-        if finished: return
+        if finished:
+            return
         var item: Dictionary = CARDS[i]
-        await _show_card(str(item["eyebrow"]), str(item["title"]), str(item["body"]), 2.35 if i < 2 else 1.7)
+        await _show_card(str(item["eyebrow"]), str(item["title"]), str(item["body"]), 2.15 if i < 3 else 1.8)
+
     if not finished:
         await _finish()
 
 func _show_card(kicker: String, title_text: String, body_text: String, hold: float) -> void:
     var out := create_tween()
-    out.tween_property(card, "modulate:a", 0.0, 0.2)
+    out.tween_property(card, "modulate:a", 0.0, 0.18)
     await out.finished
-    if finished: return
+    if finished:
+        return
     eyebrow.text = kicker
     headline.text = title_text
     description.text = body_text
     var incoming := create_tween()
-    incoming.tween_property(card, "modulate:a", 1.0, 0.42)
+    incoming.tween_property(card, "modulate:a", 1.0, 0.38)
     await incoming.finished
-    if finished: return
+    if finished:
+        return
     await get_tree().create_timer(hold).timeout
 
 func _narrate() -> void:
-    # Android device TTS is optional; intro remains usable without it.
+    # Android device text-to-speech is optional; story text stays visible without it.
     var voices := DisplayServer.tts_get_voices()
-    if voices.is_empty(): return
+    if voices.is_empty():
+        return
     var chosen_id := ""
     for voice in voices:
         if str(voice.get("language", "")).to_lower().begins_with("en"):
             chosen_id = str(voice.get("id", ""))
             break
-    if chosen_id.is_empty(): chosen_id = str(voices[0].get("id", ""))
+    if chosen_id.is_empty():
+        chosen_id = str(voices[0].get("id", ""))
     if not chosen_id.is_empty():
-        DisplayServer.tts_speak("Beneath the mountains of western Tunisia, a new day begins. The wider region carries a deep history. Meet the people, explore the market, and begin your story in Kasserine.", chosen_id, 80, 1.0, 0.92, 71, true)
+        DisplayServer.tts_speak("Sunrise comes to Kasserine. Officer Amar wakes, prepares for duty, and receives a radio alert. Traffic is building and people need help. Patrol the streets, solve local problems, and shape the story of your city.", chosen_id, 80, 1.0, 0.92, 71, true)
 
 func _finish() -> void:
-    if finished: return
+    if finished:
+        return
     finished = true
-    if DisplayServer.tts_is_speaking(): DisplayServer.tts_stop()
+    if DisplayServer.tts_is_speaking():
+        DisplayServer.tts_stop()
     var fade := create_tween()
     fade.tween_property(overlay, "modulate:a", 0.0, 0.45)
     await fade.finished

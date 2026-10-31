@@ -104,6 +104,7 @@ func _show_main() -> void:
 	v.add_child(_button(Settings.t("play"), _on_play))
 	v.add_child(_button("STORY / HISTORY", _show_story))
 	v.add_child(_button(Settings.t("settings"), _show_settings))
+	v.add_child(_button("SUPPORT / SPONSOR", _show_support))
 	v.add_child(_button(Settings.t("quit"), func(): get_tree().quit()))
 	v.modulate.a = 0.0
 	create_tween().tween_property(v, "modulate:a", 1.0, 0.8)
@@ -144,6 +145,21 @@ func _show_story() -> void:
         v.add_child(story)
 
         v.add_child(_button("BACK TO MAIN MENU", _show_main))
+
+func _show_support() -> void:
+	_clear()
+	var v := _center_box(500)
+	v.add_child(_label("HELP BUILD KASSERINE CITY", 34, Color(1, 0.85, 0.5)))
+	var message := _label(
+		"An independent open-world project made with care.\n\n"
+		+ "Support development by starring the repository, sharing the game, testing builds, and reporting bugs.\n\n"
+		+ "FINANCIAL SPONSORSHIP\nOfficial payment links will appear here after a project funding account is configured and verified.",
+		19, Color(0.91, 0.93, 0.98))
+	message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(message)
+	v.add_child(_button("OPEN GASS-OS PROJECT", func(): OS.shell_open("https://github.com/Gass-OS/Kasserine-City")))
+	v.add_child(_button("BACK TO MAIN MENU", _show_main))
 
 func _row(parent: Control, key: String, slider_min: float, slider_max: float, step: float, value: float, cb: Callable) -> void:
 	parent.add_child(_label(Settings.t(key), 22))
