@@ -1,0 +1,88 @@
+name: Kasserine City Android APK
+
+on:
+  push:
+    branches: [main, cinematic-living-city]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
+      - name: Install Android SDK packages
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Set up Godot and Android export templates
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.4.1
+          include-templates: true
+          use-dotnet: false
+
+      - name: Configure Godot Android SDK paths
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.config/godot"
+          JAVA_HOME_REAL="$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")"
+          {
+            echo '[gd_resource type="EditorSettings" format=3]'
+            echo '[resource]'
+            printf 'export/android/android_sdk_path = "%s"\n' "$ANDROID_HOME"
+            printf 'export/android/java_sdk_path = "%s"\n' "$JAVA_HOME_REAL"
+          } > "$HOME/.config/godot/editor_settings-4.4.tres"
+
+      - name: Import project and validate scripts
+        run: godot --headless --editor --path . --quit
+
+      - name: Diagnose Android export setup
+        run: |
+          echo "=== Android SDK ==="
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls -ld "$ANDROID_HOME/platforms/android-35" "$ANDROID_HOME/build-tools/35.0.0"
+          echo "=== Java ==="
+          java -version
+          echo "=== Godot export templates ==="
+          ls -lah "$HOME/.local/share/godot/export_templates/4.4.1.stable" || true
+          echo "=== Export preset ==="
+          cat export_presets.cfg
+
+      - name: Export native Android APK
+        run: |
+          mkdir -p build
+          mkdir -p "$HOME/.android"
+          keytool -genkeypair -keystore "$HOME/.android/debug.keystore" \
+            -storepass android -alias androiddebugkey -keypass android \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US" -noprompt
+          GODOT_ANDROID_KEYSTORE_DEBUG_PATH="$HOME/.android/debug.keystore" \
+          GODOT_ANDROID_KEYSTORE_DEBUG_USER="androiddebugkey" \
+          GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD="android" \
+            godot --verbose --headless --path . --export-debug Android build/KasserineCity.apk
+          test -s build/KasserineCity.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kasserine-City-Android-APK
+          path: build/KasserineCity.apk
+          if-no-files-found: error
+          retention-days: 14

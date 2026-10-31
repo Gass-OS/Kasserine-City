@@ -657,7 +657,7 @@ func _car_box(car: Node3D, size: Vector3, pos: Vector3, mat: Material) -> MeshIn
     bm.size = size
     return _car_mesh(car, bm, pos, mat)
 
-func _create_car(pos: Vector3, paint: Color, angle: float) -> Node3D:
+func _create_car_s2(pos: Vector3, paint: Color, angle: float) -> Node3D:
     var car := Node3D.new()
     car.name = "ParkedCar"
     car.position = pos
@@ -818,7 +818,7 @@ func _tn_dome(pos: Vector3, rad: float, mat: Material) -> void:
     dm.is_hemisphere = true
     _tn_node(dm, mat, Transform3D(Basis.IDENTITY, pos))
 
-func _tn_building(cx: float, cz: float, w: float, d: float, h: float, style: int, with_sign := true) -> void:
+func _tn_building_proc(cx: float, cz: float, w: float, d: float, h: float, style: int, with_sign := true) -> void:
     var tones: Array = [Color(0.95, 0.94, 0.9), Color(0.9, 0.85, 0.74), Color(0.86, 0.76, 0.6), Color(0.93, 0.9, 0.82), Color(0.82, 0.7, 0.52)]
     var tone: Color = tones[posmod(style, tones.size())]
     var rng := RandomNumberGenerator.new()
@@ -970,3 +970,48 @@ func _tn_palms() -> void:
 func _tn_extras() -> void:
     _tn_mosque(Vector3(12, 0, -36))
     _tn_palms()
+
+# ===== Stage 7: real Kenney models =====
+const KenneyKit = preload("res://scripts/kenney.gd")
+var _car_counter := 0
+
+func _create_car(pos: Vector3, paint: Color, angle: float) -> Node3D:
+    _car_counter += 1
+    var spawned = KenneyKit.car(_car_counter + int(paint.r * 9.0 + paint.g * 5.0))
+    if spawned == null:
+        return _create_car_s2(pos, paint, angle)
+    var car := Node3D.new()
+    car.name = "ParkedCar"
+    car.position = pos
+    car.rotation.y = angle
+    add_child(car)
+    car.add_child(spawned["node"])
+    var dims: Vector3 = spawned["size"]
+    var hz := dims.z * 0.5
+    var hx := dims.x * 0.32
+    var hy := dims.y * 0.4
+    var head_mat := _glow_mat(Color(1.0, 0.95, 0.8), 4.0)
+    var tail_mat := _glow_mat(Color(1.0, 0.1, 0.1), 2.5)
+    for side in [-1.0, 1.0]:
+        _car_box(car, Vector3(0.36, 0.14, 0.06), Vector3(side * hx, hy, -hz - 0.02), head_mat)
+        _car_box(car, Vector3(0.34, 0.12, 0.06), Vector3(side * hx, hy + 0.02, hz + 0.02), tail_mat)
+    var spot := SpotLight3D.new()
+    spot.position = Vector3(0, hy, -hz)
+    spot.rotation_degrees = Vector3(-4, 0, 0)
+    spot.spot_range = 18.0
+    spot.spot_angle = 30.0
+    spot.light_color = Color(1.0, 0.92, 0.75)
+    spot.light_energy = 0.0
+    spot.visible = false
+    spot.add_to_group("car_headlight")
+    car.add_child(spot)
+    return car
+
+func _tn_building(cx: float, cz: float, w: float, d: float, h: float, style: int, with_sign := true) -> void:
+    if with_sign and posmod(int(absf(cx) * 0.13 + absf(cz) * 0.29) + style, 3) != 0:
+        var tints: Array = [Color(1.0, 0.97, 0.9), Color(1.0, 0.92, 0.8), Color(0.98, 0.94, 0.86)]
+        var holder = KenneyKit.building(cx, cz, w, d, h, style * 977 + int(absf(cx) * 31.0 + absf(cz) * 17.0), tints[posmod(style, 3)])
+        if holder != null:
+            add_child(holder)
+            return
+    _tn_building_proc(cx, cz, w, d, h, style, with_sign)
