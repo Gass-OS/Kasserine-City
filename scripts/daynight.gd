@@ -53,6 +53,7 @@ func _setup() -> void:
 	clock.add_theme_color_override("font_outline_color", Color.BLACK)
 	clock.position = Vector2(get_viewport().get_visible_rect().size.x - 130.0, 64.0)
 	layer.add_child(clock)
+	_fx_setup()
 
 func is_night() -> bool:
 	return t < 0.22 or t > 0.78
@@ -79,28 +80,29 @@ func _process(delta: float) -> void:
 	env.ambient_light_color = Color(0.08, 0.1, 0.2).lerp(Color(0.75, 0.8, 0.9), day)
 	env.ambient_light_energy = lerpf(0.5, 1.0, day)
 	var hrs := t * 24.0
+	_fx_update(day, warm, hor)
 	clock.text = "%02d:%02d" % [int(hrs), int(fmod(hrs, 1.0) * 60.0)]
 
 func _fx_setup() -> void:
-    env.tonemap_mode = Environment.TONE_MAPPER_ACES
-    env.tonemap_white = 6.0
-    env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
-    env.adjustment_enabled = true
-    env.adjustment_contrast = 1.08
-    env.adjustment_saturation = 1.12
-    env.glow_enabled = Settings.quality >= 1
-    env.glow_intensity = 0.8
-    env.glow_bloom = 0.08
-    env.glow_hdr_threshold = 1.0
-    env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
-    env.fog_enabled = Settings.quality >= 1
-    env.fog_density = 0.004
-    env.fog_sky_affect = 0.5
-    sun.directional_shadow_max_distance = 110.0
-    sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	env.tonemap_mode = Environment.TONE_MAPPER_ACES
+	env.tonemap_white = 6.0
+	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
+	env.adjustment_enabled = true
+	env.adjustment_contrast = 1.08
+	env.adjustment_saturation = 1.12
+	env.glow_enabled = Settings.quality >= 1
+	env.glow_intensity = 0.8
+	env.glow_bloom = 0.08
+	env.glow_hdr_threshold = 1.0
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
+	env.fog_enabled = Settings.quality >= 1
+	env.fog_density = 0.004
+	env.fog_sky_affect = 0.5
+	sun.directional_shadow_max_distance = 110.0
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
 
 func _fx_update(day: float, warm: float, hor: Color) -> void:
-    env.fog_light_color = hor
-    env.fog_density = lerpf(0.007, 0.0035, day)
-    env.glow_intensity = lerpf(1.0, 0.6, day)
-    env.tonemap_exposure = lerpf(1.15, 1.0, day)
+	env.fog_light_color = hor
+	env.fog_density = lerpf(0.007, 0.0035, day)
+	env.glow_intensity = lerpf(1.0, 0.6, day)
+	env.tonemap_exposure = lerpf(1.15, 1.0, day)
