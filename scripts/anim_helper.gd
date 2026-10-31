@@ -49,10 +49,7 @@ static func setup(model: Node3D) -> void:
         model.set_meta("anim_status", "no Skeleton3D in model -> procedural")
         return
     var bmap := _bone_map(skel)
-    var names: Array = []
-    for i in range(mini(skel.get_bone_count(), 6)):
-        names.append(skel.get_bone_name(i))
-    var report := "Skeleton: %d bones (%s...)" % [skel.get_bone_count(), ", ".join(names)]
+    var report := "Skeleton: %d bones" % skel.get_bone_count()
     var lib := AnimationLibrary.new()
     var skel_path := String(model.get_path_to(skel))
     for clip_name in CLIPS:
@@ -68,22 +65,27 @@ static func setup(model: Node3D) -> void:
             continue
         var best: Animation = null
         var best_name := ""
+        var all_names: Array = []
         for n in src.get_animation_list():
-            if String(n) == "RESET":
+            var sn := String(n)
+            all_names.append(sn)
+            var low := sn.to_lower()
+            if low == "reset" or low.contains("target") or low.contains("tpose") or low.contains("t-pose"):
                 continue
             var a := src.get_animation(n)
+            if low.contains(String(clip_name)):
+                best = a
+                best_name = sn
+                break
             if best == null or a.get_track_count() > best.get_track_count():
                 best = a
-                best_name = String(n)
+                best_name = sn
         if best == null:
-            report += "\n%s: no animations" % clip_name
+            report += "\n%s: only takes [%s]" % [clip_name, ", ".join(all_names)]
             inst.free()
             continue
         var anim := best.duplicate() as Animation
         var total := anim.get_track_count()
-        var sample := ""
-        if total > 0:
-            sample = String(anim.track_get_path(0))
         var matched := 0
         for i in range(total - 1, -1, -1):
             var p := anim.track_get_path(i)
@@ -99,12 +101,12 @@ static func setup(model: Node3D) -> void:
             anim.loop_mode = Animation.LOOP_NONE
         else:
             anim.loop_mode = Animation.LOOP_LINEAR
-        report += "\n%s: '%s' tracks %d matched %d e.g. %s" % [clip_name, best_name, total, matched, sample]
+        report += "\n%s: takes [%s] -> '%s' %d/%d tracks" % [clip_name, ", ".join(all_names), best_name, matched, total]
         if matched > 0:
             lib.add_animation(clip_name, anim)
         inst.free()
     if lib.get_animation_list().size() == 0:
-        model.set_meta("anim_status", "NO MATCH -> procedural\n" + report)
+        model.set_meta("anim_status", "NO CLIP -> procedural\n" + report)
         return
     var ap := AnimationPlayer.new()
     ap.name = "AnimPlayer"

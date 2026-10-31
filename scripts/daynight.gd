@@ -66,7 +66,7 @@ func _process(delta: float) -> void:
 	var day := clampf(d * 2.5 + 0.35, 0.0, 1.0)
 	var warm := pow(clampf(1.0 - absf(d), 0.0, 1.0), 4.0)
 	sun.rotation_degrees = Vector3(-(t - 0.25) * 360.0, -35.0, 0.0)
-	sun.light_energy = day * 1.3
+	sun.light_energy = day * 0.95
 	sun.light_color = Color(1, 1, 1).lerp(Color(1.0, 0.6, 0.35), warm)
 	sun.visible = day > 0.01
 	moon.rotation_degrees = Vector3(-(t - 0.25) * 360.0 + 180.0, -35.0, 0.0)
@@ -78,7 +78,7 @@ func _process(delta: float) -> void:
 	sky_mat.ground_horizon_color = hor
 	sky_mat.ground_bottom_color = top.darkened(0.5)
 	env.ambient_light_color = Color(0.08, 0.1, 0.2).lerp(Color(0.75, 0.8, 0.9), day)
-	env.ambient_light_energy = lerpf(0.5, 1.0, day)
+	env.ambient_light_energy = lerpf(0.5, 0.7, day)
 	var hrs := t * 24.0
 	_fx_update(day, warm, hor)
 	clock.text = "%02d:%02d" % [int(hrs), int(fmod(hrs, 1.0) * 60.0)]
@@ -89,20 +89,30 @@ func _fx_setup() -> void:
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	env.adjustment_enabled = true
 	env.adjustment_contrast = 1.08
-	env.adjustment_saturation = 1.12
+	env.adjustment_saturation = 1.22
 	env.glow_enabled = Settings.quality >= 1
 	env.glow_intensity = 0.8
 	env.glow_bloom = 0.08
-	env.glow_hdr_threshold = 1.0
+	env.glow_hdr_threshold = 1.5
 	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
 	env.fog_enabled = Settings.quality >= 1
 	env.fog_density = 0.004
 	env.fog_sky_affect = 0.5
+	_fx_hq()
 	sun.directional_shadow_max_distance = 110.0
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
 
 func _fx_update(day: float, warm: float, hor: Color) -> void:
 	env.fog_light_color = hor
 	env.fog_density = lerpf(0.007, 0.0035, day)
-	env.glow_intensity = lerpf(1.0, 0.6, day)
-	env.tonemap_exposure = lerpf(1.15, 1.0, day)
+	env.glow_intensity = lerpf(1.0, 0.2, day)
+	env.tonemap_exposure = lerpf(1.15, 0.85, day)
+
+func _fx_hq() -> void:
+	var m := RenderingServer.get_current_rendering_method()
+	if m == "forward_plus" and Settings.quality >= 2:
+		env.ssao_enabled = true
+		env.ssao_radius = 2.0
+		env.ssao_intensity = 2.0
+		env.ssr_enabled = true
+		env.ssr_max_steps = 48

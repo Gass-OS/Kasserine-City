@@ -819,7 +819,7 @@ func _tn_dome(pos: Vector3, rad: float, mat: Material) -> void:
     _tn_node(dm, mat, Transform3D(Basis.IDENTITY, pos))
 
 func _tn_building_proc(cx: float, cz: float, w: float, d: float, h: float, style: int, with_sign := true) -> void:
-    var tones: Array = [Color(0.95, 0.94, 0.9), Color(0.9, 0.85, 0.74), Color(0.86, 0.76, 0.6), Color(0.93, 0.9, 0.82), Color(0.82, 0.7, 0.52)]
+    var tones: Array = [Color(0.86, 0.82, 0.74), Color(0.82, 0.74, 0.6), Color(0.78, 0.66, 0.5), Color(0.84, 0.78, 0.66), Color(0.74, 0.62, 0.46)]
     var tone: Color = tones[posmod(style, tones.size())]
     var rng := RandomNumberGenerator.new()
     rng.seed = int(absf(cx) * 71.0 + absf(cz) * 113.0 + h * 13.0) + style * 7 + 5
@@ -902,7 +902,7 @@ func _tn_building_proc(cx: float, cz: float, w: float, d: float, h: float, style
         _tn_label(txt, Transform3D(dbs, dbase + dbs * Vector3(dalong, 4.1, 0.16)), 64, 0.0085, Color(1, 1, 1))
 
 func _tn_mosque(pos: Vector3) -> void:
-    var white := Color(0.96, 0.95, 0.91)
+    var white := Color(0.86, 0.84, 0.78)
     var green := _tn_mat("dome_g", Color(0.12, 0.5, 0.35), 0.35, 0.25)
     _box(self, Vector3(14, 8, 11), pos + Vector3(0, 4, 0), white, true)
     _box(self, Vector3(14.4, 0.7, 11.4), pos + Vector3(0, 8.35, 0), white)
@@ -1009,8 +1009,8 @@ func _create_car(pos: Vector3, paint: Color, angle: float) -> Node3D:
 
 func _tn_building(cx: float, cz: float, w: float, d: float, h: float, style: int, with_sign := true) -> void:
     if with_sign and posmod(int(absf(cx) * 0.13 + absf(cz) * 0.29) + style, 3) != 0:
-        var tints: Array = [Color(1.0, 0.97, 0.9), Color(1.0, 0.92, 0.8), Color(0.98, 0.94, 0.86)]
-        var holder = KenneyKit.building(cx, cz, w, d, h, style * 977 + int(absf(cx) * 31.0 + absf(cz) * 17.0), tints[posmod(style, 3)])
+        var tints: Array = [Color(0.9, 0.82, 0.68), Color(0.86, 0.76, 0.6), Color(0.82, 0.8, 0.72), Color(0.92, 0.72, 0.52), Color(0.72, 0.8, 0.86)]
+        var holder = KenneyKit.building(cx, cz, w, d, h, style * 977 + int(absf(cx) * 31.0 + absf(cz) * 17.0), tints[posmod(style, tints.size())])
         if holder != null:
             add_child(holder)
             return
