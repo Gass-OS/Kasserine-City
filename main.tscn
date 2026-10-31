@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/world.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/daynight.gd" id="2"]
@@ -6,6 +6,7 @@
 [ext_resource type="Script" path="res://scripts/dialogue.gd" id="4"]
 [ext_resource type="Script" path="res://scripts/anim_driver.gd" id="5"]
 [ext_resource type="Script" path="res://scripts/missions_plus.gd" id="6"]
+[ext_resource type="Script" path="res://scripts/materials_plus.gd" id="7"]
 
 [node name="KasserineCity" type="Node3D"]
 script = ExtResource("1")
@@ -24,3 +25,6 @@ script = ExtResource("5")
 
 [node name="MissionsPlus" type="Node" parent="."]
 script = ExtResource("6")
+
+[node name="MaterialsPlus" type="Node" parent="."]
+script = ExtResource("7")
