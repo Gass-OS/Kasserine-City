@@ -89,7 +89,10 @@ func _create_city():
             var cz = z * 24.0 + rng.randf_range(-4, 4)
             var w = rng.randf_range(7.0, 11.0)
             var d = rng.randf_range(7.0, 11.0)
-            var h = rng.randf_range(4.0, 13.0)
+            var h = rng.randf_range(5.0, 13.0)
+            var k = fmod(absf(sin(float(x) * 12.9898 + float(z) * 78.233)) * 43758.5453, 1.0)
+            if maxf(absf(x), absf(z)) >= 2 and k > 0.4:
+                h += (k - 0.4) * 45.0
             _box(self, Vector3(w, h, d), Vector3(cx, h / 2.0, cz), palette[rng.randi_range(0, palette.size() - 1)], true)
             _add_windows(cx, cz, w, d, h)
 
