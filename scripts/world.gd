@@ -6,6 +6,7 @@ const CharacterModel = preload("res://scripts/character_model.gd")
 func _ready():
     _create_environment()
     _create_city()
+    _tn_extras()
     _create_nature_and_vehicles()
     var player = CharacterBody3D.new()
     player.set_script(PlayerScript)
@@ -58,7 +59,7 @@ func _box(parent: Node3D, size: Vector3, pos: Vector3, color: Color, solid := fa
         parent.add_child(body)
 
 func _create_city():
-    _box(self, Vector3(220, 1, 220), Vector3(0, -0.55, 0), Color(0.42, 0.48, 0.31), true)
+    _box(self, Vector3(220, 1, 220), Vector3(0, -0.55, 0), Color(0.66, 0.58, 0.4), true)
 
     var road = Color(0.16, 0.17, 0.18)
     var line = Color(0.92, 0.83, 0.55)
@@ -81,20 +82,19 @@ func _create_city():
         Color(0.68, 0.59, 0.46)
     ]
 
-    for x in range(-4, 5):
-        for z in range(-4, 5):
-            if abs(x) <= 1 and abs(z) <= 1:
+    for x in range(-4, 4):
+        for z in range(-4, 4):
+            if x >= -2 and x <= 1 and z >= -2 and z <= 1:
                 continue
-            var cx = x * 24.0 + rng.randf_range(-4, 4)
-            var cz = z * 24.0 + rng.randf_range(-4, 4)
-            var w = rng.randf_range(7.0, 11.0)
-            var d = rng.randf_range(7.0, 11.0)
+            var cx = x * 24.0 + 12.0 + rng.randf_range(-1.5, 1.5)
+            var cz = z * 24.0 + 12.0 + rng.randf_range(-1.5, 1.5)
+            var w = rng.randf_range(6.5, 9.5)
+            var d = rng.randf_range(6.5, 9.5)
             var h = rng.randf_range(5.0, 13.0)
             var k = fmod(absf(sin(float(x) * 12.9898 + float(z) * 78.233)) * 43758.5453, 1.0)
             if maxf(absf(x), absf(z)) >= 2 and k > 0.4:
-                h += (k - 0.4) * 45.0
-            _box(self, Vector3(w, h, d), Vector3(cx, h / 2.0, cz), palette[rng.randi_range(0, palette.size() - 1)], true)
-            _add_windows(cx, cz, w, d, h)
+                h += (k - 0.4) * 14.0
+            _tn_building(cx, cz, w, d, h, rng.randi_range(0, palette.size() - 1))
 
     var sign = Label3D.new()
     sign.text = "KASSERINE CITY"
@@ -158,6 +158,7 @@ func _create_people():
     guide.font_size = 36
     guide.position = Vector3(0, 2.5, 0)
     guide.modulate = Color.YELLOW
+    guide.billboard = BaseMaterial3D.BILLBOARD_ENABLED
     citizens[0].add_child(guide)
 
     _landmark("MARKET", Vector3(-24, 3, 0))
@@ -387,14 +388,14 @@ func _update_traffic(delta: float):
 
 func _create_landmark_building(title: String, pos: Vector3,
         size: Vector3, color: Color):
-    _box(self, size, pos + Vector3(0, size.y * 0.5, 0), color, true)
-    _add_windows(pos.x, pos.z, size.x, size.z, size.y)
+    _tn_building(pos.x, pos.z, size.x, size.z, size.y, posmod(int(pos.x * 0.5 + pos.z), 5), false)
 
     var sign := Label3D.new()
     sign.text = title
     sign.font_size = 32
     sign.position = pos + Vector3(0, size.y + 1.0, 0)
     sign.modulate = Color(1.0, 0.91, 0.62)
+    sign.billboard = BaseMaterial3D.BILLBOARD_ENABLED
     add_child(sign)
 
 func _create_street_lamp_old(pos: Vector3):
@@ -614,7 +615,7 @@ func _create_street_lamp(pos: Vector3):
     pool.rotation_degrees.x = -90
     pool.position = Vector3(0.85, 0.22, 0)
     pool.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-    lamp.add_child(pool)
+    pool.free()
 
 func _car_mesh(car: Node3D, mesh: Mesh, pos: Vector3, mat: Material, rot_y := 0.0) -> MeshInstance3D:
     var mi := MeshInstance3D.new()
@@ -704,3 +705,242 @@ func _create_car(pos: Vector3, paint: Color, angle: float) -> Node3D:
     spot.add_to_group("car_headlight")
     car.add_child(spot)
     return car
+
+# ===== Stage 6: Tunisian architecture =====
+const TN_SHOPS = ["مخبزة", "صيدلية", "مقهى", "سوق", "ورشة", "مكتبة", "حلاقة", "Boulangerie", "Pharmacie", "Café", "Épicerie"]
+var _tn_cache := {}
+
+func _tn_mat(key: String, color: Color, rough := 0.9, metal := 0.0) -> StandardMaterial3D:
+    if _tn_cache.has(key):
+        return _tn_cache[key]
+    var m := StandardMaterial3D.new()
+    m.albedo_color = color
+    m.roughness = rough
+    m.metallic = metal
+    _tn_cache[key] = m
+    return m
+
+func _arch_mesh(w: float, h: float) -> ArrayMesh:
+    var key := "arch_%.2f_%.2f" % [w, h]
+    if _tn_cache.has(key):
+        return _tn_cache[key]
+    var st := SurfaceTool.new()
+    st.begin(Mesh.PRIMITIVE_TRIANGLES)
+    st.set_normal(Vector3(0, 0, 1))
+    var r := w * 0.5
+    var y0 := -h * 0.5
+    var yc := h * 0.5 - r
+    var pa := Vector3(-r, y0, 0.0)
+    var pb := Vector3(r, y0, 0.0)
+    var pc := Vector3(r, yc, 0.0)
+    var pd := Vector3(-r, yc, 0.0)
+    for v in [pa, pb, pc, pa, pc, pd]:
+        st.add_vertex(v)
+    var seg := 10
+    for i in range(seg):
+        var t0 := PI * float(i) / float(seg)
+        var t1 := PI * float(i + 1) / float(seg)
+        st.add_vertex(Vector3(0.0, yc, 0.0))
+        st.add_vertex(Vector3(r * cos(t0), yc + r * sin(t0), 0.0))
+        st.add_vertex(Vector3(r * cos(t1), yc + r * sin(t1), 0.0))
+    var mesh := st.commit()
+    _tn_cache[key] = mesh
+    return mesh
+
+func _tn_multimesh(xforms: Array, mesh: Mesh, mat: Material) -> void:
+    if xforms.is_empty():
+        return
+    var mm := MultiMesh.new()
+    mm.transform_format = MultiMesh.TRANSFORM_3D
+    mm.mesh = mesh
+    mm.instance_count = xforms.size()
+    for i in range(xforms.size()):
+        mm.set_instance_transform(i, xforms[i])
+    var inst := MultiMeshInstance3D.new()
+    inst.multimesh = mm
+    inst.material_override = mat
+    inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    add_child(inst)
+
+func _tn_node(mesh: Mesh, mat: Material, xf: Transform3D) -> void:
+    var mi := MeshInstance3D.new()
+    mi.mesh = mesh
+    mi.material_override = mat
+    mi.transform = xf
+    add_child(mi)
+
+func _tn_boxnode(size: Vector3, mat: Material, xf: Transform3D) -> void:
+    var bm := BoxMesh.new()
+    bm.size = size
+    _tn_node(bm, mat, xf)
+
+func _tn_label(text: String, xf: Transform3D, size: int, px: float, color: Color) -> void:
+    var l := Label3D.new()
+    l.text = text
+    l.font_size = size
+    l.pixel_size = px
+    l.modulate = color
+    l.outline_size = 10
+    l.outline_modulate = Color(0, 0, 0, 0.9)
+    l.transform = xf
+    add_child(l)
+
+func _tn_dome(pos: Vector3, rad: float, mat: Material) -> void:
+    var dm := SphereMesh.new()
+    dm.radius = rad
+    dm.height = rad
+    dm.is_hemisphere = true
+    _tn_node(dm, mat, Transform3D(Basis.IDENTITY, pos))
+
+func _tn_building(cx: float, cz: float, w: float, d: float, h: float, style: int, with_sign := true) -> void:
+    var tones: Array = [Color(0.95, 0.94, 0.9), Color(0.9, 0.85, 0.74), Color(0.86, 0.76, 0.6), Color(0.93, 0.9, 0.82), Color(0.82, 0.7, 0.52)]
+    var tone: Color = tones[posmod(style, tones.size())]
+    var rng := RandomNumberGenerator.new()
+    rng.seed = int(absf(cx) * 71.0 + absf(cz) * 113.0 + h * 13.0) + style * 7 + 5
+    _box(self, Vector3(w, h, d), Vector3(cx, h / 2.0, cz), tone, true)
+    _box(self, Vector3(w + 0.3, 0.7, d + 0.3), Vector3(cx, h + 0.35, cz), tone.darkened(0.05))
+    _box(self, Vector3(w - 0.4, 0.06, d - 0.4), Vector3(cx, h + 0.72, cz), Color(0.5, 0.46, 0.42))
+    if rng.randf() < 0.45:
+        _box(self, Vector3(w + 0.16, 0.3, d + 0.16), Vector3(cx, h - 0.45, cz), Color(0.1, 0.32, 0.62))
+    var roof_y := h + 0.75
+    var roll := rng.randf()
+    if roll < 0.25:
+        var cm := CylinderMesh.new()
+        cm.top_radius = 0.7
+        cm.bottom_radius = 0.7
+        cm.height = 1.3
+        _tn_node(cm, _tn_mat("tank", Color(0.25, 0.27, 0.3), 0.5, 0.4), Transform3D(Basis.IDENTITY, Vector3(cx + w * 0.2, roof_y + 0.65, cz - d * 0.2)))
+    elif roll < 0.45:
+        _box(self, Vector3(2.2, 2.2, 2.2), Vector3(cx - w * 0.2, roof_y + 1.1, cz + d * 0.15), tone)
+    elif roll < 0.62:
+        var dmat: Material = _tn_mat("dome_w", Color(0.96, 0.96, 0.94), 0.5)
+        if rng.randf() < 0.4:
+            dmat = _tn_mat("dome_b", Color(0.12, 0.38, 0.66), 0.4, 0.2)
+        _tn_dome(Vector3(cx, roof_y, cz), minf(w, d) * 0.26, dmat)
+
+    var faces: Array = [
+        [Vector3(0, 0, d * 0.5), 0.0, w],
+        [Vector3(0, 0, -d * 0.5), PI, w],
+        [Vector3(w * 0.5, 0, 0), PI * 0.5, d],
+        [Vector3(-w * 0.5, 0, 0), -PI * 0.5, d],
+    ]
+    var door_face := int(rng.randi() % 4)
+    var has_sign := with_sign and h >= 6.5 and rng.randf() < 0.5
+    var floors := maxi(1, int((h - 1.0) / 3.2))
+    var frames: Array = []
+    var dark: Array = []
+    var lit: Array = []
+    for fi in range(faces.size()):
+        var origin: Vector3 = faces[fi][0]
+        var yaw: float = faces[fi][1]
+        var span: float = faces[fi][2]
+        var cols := int(span / 2.5)
+        if cols < 1:
+            continue
+        var spacing := span / float(cols)
+        var bs := Basis(Vector3.UP, yaw)
+        var base := Vector3(cx, 0.0, cz) + origin
+        for c in range(cols):
+            var along := -span * 0.5 + (float(c) + 0.5) * spacing
+            for r in range(floors):
+                var y := 1.9 + float(r) * 3.2
+                if y + 1.2 > h - 0.4:
+                    continue
+                if fi == door_face and c == (cols >> 1):
+                    if r == 0 or (has_sign and r <= 1):
+                        continue
+                frames.append(Transform3D(bs, base + bs * Vector3(along, y, 0.06)))
+                var gx := Transform3D(bs, base + bs * Vector3(along, y - 0.02, 0.12))
+                if rng.randf() < 0.45:
+                    lit.append(gx)
+                else:
+                    dark.append(gx)
+    _tn_multimesh(frames, _arch_mesh(1.5, 2.4), _tn_mat("blue", Color(0.1, 0.32, 0.62), 0.6))
+    _tn_multimesh(dark, _arch_mesh(1.1, 2.0), _glass_mat())
+    _tn_multimesh(lit, _arch_mesh(1.1, 2.0), _glow_mat(Color(1.0, 0.82, 0.5), 2.2))
+
+    var df: Array = faces[door_face]
+    var dorigin: Vector3 = df[0]
+    var dspan: float = df[2]
+    var dbs := Basis(Vector3.UP, float(df[1]))
+    var dcols := maxi(1, int(dspan / 2.5))
+    var dalong := -dspan * 0.5 + (float(dcols >> 1) + 0.5) * (dspan / float(dcols))
+    var dbase := Vector3(cx, 0.0, cz) + dorigin
+    _tn_node(_arch_mesh(2.3, 3.5), _tn_mat("doorframe", tone.darkened(0.15)), Transform3D(dbs, dbase + dbs * Vector3(dalong, 1.75, 0.05)))
+    _tn_node(_arch_mesh(1.8, 3.1), _tn_mat("door", Color(0.08, 0.28, 0.55), 0.6), Transform3D(dbs, dbase + dbs * Vector3(dalong, 1.55, 0.1)))
+    if has_sign:
+        var txt: String = TN_SHOPS[rng.randi() % TN_SHOPS.size()]
+        var pcols: Array = [Color(0.08, 0.3, 0.2), Color(0.35, 0.1, 0.12), Color(0.1, 0.22, 0.45)]
+        var pcol: Color = pcols[rng.randi() % 3]
+        _tn_boxnode(Vector3(3.4, 0.8, 0.1), _tn_mat("plq" + pcol.to_html(), pcol, 0.7), Transform3D(dbs, dbase + dbs * Vector3(dalong, 4.1, 0.08)))
+        _tn_label(txt, Transform3D(dbs, dbase + dbs * Vector3(dalong, 4.1, 0.16)), 64, 0.0085, Color(1, 1, 1))
+
+func _tn_mosque(pos: Vector3) -> void:
+    var white := Color(0.96, 0.95, 0.91)
+    var green := _tn_mat("dome_g", Color(0.12, 0.5, 0.35), 0.35, 0.25)
+    _box(self, Vector3(14, 8, 11), pos + Vector3(0, 4, 0), white, true)
+    _box(self, Vector3(14.4, 0.7, 11.4), pos + Vector3(0, 8.35, 0), white)
+    _box(self, Vector3(14.1, 0.3, 11.1), pos + Vector3(0, 6.3, 0), Color(0.12, 0.5, 0.35))
+    _tn_dome(pos + Vector3(0, 8.7, 0), 4.2, green)
+    _tn_dome(pos + Vector3(-4.8, 8.7, 3.2), 1.6, green)
+    _tn_dome(pos + Vector3(4.8, 8.7, 3.2), 1.6, green)
+    var mx := pos.x - 8.4
+    var mz := pos.z + 2.0
+    _box(self, Vector3(3.0, 19.0, 3.0), Vector3(mx, 9.5, mz), white, true)
+    _box(self, Vector3(3.9, 0.4, 3.9), Vector3(mx, 19.2, mz), Color(0.12, 0.5, 0.35))
+    _box(self, Vector3(2.0, 3.4, 2.0), Vector3(mx, 21.1, mz), white)
+    var cone := CylinderMesh.new()
+    cone.top_radius = 0.0
+    cone.bottom_radius = 1.5
+    cone.height = 2.6
+    _tn_node(cone, green, Transform3D(Basis.IDENTITY, Vector3(mx, 24.1, mz)))
+    var fin := SphereMesh.new()
+    fin.radius = 0.25
+    fin.height = 0.5
+    _tn_node(fin, _tn_mat("gold", Color(0.9, 0.75, 0.3), 0.3, 0.8), Transform3D(Basis.IDENTITY, Vector3(mx, 25.6, mz)))
+    var slits: Array = []
+    for yy in [6.0, 11.0, 15.5]:
+        slits.append(Transform3D(Basis.IDENTITY, Vector3(mx, yy, mz + 1.55)))
+        slits.append(Transform3D(Basis(Vector3.UP, PI), Vector3(mx, yy, mz - 1.55)))
+        slits.append(Transform3D(Basis(Vector3.UP, PI * 0.5), Vector3(mx + 1.55, yy, mz)))
+        slits.append(Transform3D(Basis(Vector3.UP, -PI * 0.5), Vector3(mx - 1.55, yy, mz)))
+    _tn_multimesh(slits, _arch_mesh(0.5, 1.6), _tn_mat("slit", Color(0.08, 0.1, 0.12), 0.4))
+    var wins: Array = []
+    for k in range(5):
+        wins.append(Transform3D(Basis.IDENTITY, pos + Vector3(-6.0 + float(k) * 3.0, 3.8, 5.56)))
+    _tn_multimesh(wins, _arch_mesh(1.3, 3.0), _tn_mat("mwin", Color(0.12, 0.5, 0.35), 0.5))
+    _tn_node(_arch_mesh(4.0, 5.9), _tn_mat("mframe", Color(0.12, 0.5, 0.35), 0.5), Transform3D(Basis.IDENTITY, pos + Vector3(0, 2.95, 5.52)))
+    _tn_node(_arch_mesh(3.2, 5.2), _tn_mat("mdoor", Color(0.35, 0.2, 0.1), 0.7), Transform3D(Basis.IDENTITY, pos + Vector3(0, 2.6, 5.58)))
+    _tn_label("الجامع الكبير", Transform3D(Basis.IDENTITY, pos + Vector3(0, 7.2, 5.62)), 96, 0.01, Color(1.0, 0.95, 0.7))
+
+func _tn_palms() -> void:
+    var rng := RandomNumberGenerator.new()
+    rng.seed = 777
+    var trunks: Array = []
+    var fronds: Array = []
+    for i in range(-2, 3):
+        for side in [-1.0, 1.0]:
+            for j in range(-4, 4):
+                var pos := Vector3(float(i) * 24.0 + float(side) * 5.6, 0.0, float(j) * 24.0 + 14.0 + rng.randf_range(-1.0, 1.0))
+                var s := rng.randf_range(0.8, 1.25)
+                var lean := rng.randf_range(-0.08, 0.08)
+                var tb := Basis(Vector3.RIGHT, lean) * Basis.from_scale(Vector3(s, s, s))
+                trunks.append(Transform3D(tb, pos + Vector3(0, 3.0 * s, 0)))
+                var top := pos + Vector3(0, 6.0 * s, 0)
+                var yaw0 := rng.randf() * TAU
+                for k in range(9):
+                    var fb := Basis(Vector3.UP, yaw0 + float(k) * TAU / 9.0) * Basis(Vector3.RIGHT, deg_to_rad(-28.0 + rng.randf_range(-6.0, 6.0)))
+                    fronds.append(Transform3D(fb.scaled(Vector3(s, s, s)), top + fb * Vector3(0, 0, -1.55 * s)))
+    var tm := CylinderMesh.new()
+    tm.top_radius = 0.16
+    tm.bottom_radius = 0.28
+    tm.height = 6.0
+    tm.radial_segments = 8
+    _tn_multimesh(trunks, tm, _tn_mat("trunk", Color(0.45, 0.36, 0.26), 0.95))
+    var fm := BoxMesh.new()
+    fm.size = Vector3(0.55, 0.04, 3.1)
+    _tn_multimesh(fronds, fm, _tn_mat("frond", Color(0.18, 0.42, 0.14), 0.8))
+
+func _tn_extras() -> void:
+    _tn_mosque(Vector3(12, 0, -36))
+    _tn_palms()

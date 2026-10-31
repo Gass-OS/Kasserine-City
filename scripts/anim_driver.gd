@@ -15,7 +15,9 @@ func _ready() -> void:
     add_child(layer)
     label = Label.new()
     label.position = Vector2(20, 270)
-    label.add_theme_font_size_override("font_size", 16)
+    label.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+    label.custom_minimum_size = Vector2(900, 0)
+    label.add_theme_font_size_override("font_size", 13)
     label.add_theme_constant_override("outline_size", 5)
     label.add_theme_color_override("font_outline_color", Color.BLACK)
     layer.add_child(label)
@@ -66,7 +68,7 @@ func _process(delta: float) -> void:
             elif s > 0.35 and ap.has_animation("run"):
                 want = "run"
                 spd = clampf(s / 6.0, 0.35, 1.5)
-            if ap.current_animation != want:
+            if ap.current_animation != want and ap.has_animation(want):
                 ap.play(want, 0.2)
             ap.speed_scale = spd
         else:
@@ -79,7 +81,7 @@ func _process(delta: float) -> void:
                 m.position.y = lerpf(m.position.y, 0.0, 0.2)
                 m.rotation.z = lerpf(m.rotation.z, 0.0, 0.2)
     if label != null:
-        if shown < 10.0:
+        if shown < 45.0:
             var pl := world.get_node_or_null("Player")
             var pm := _model_of(pl) if pl else null
             label.text = "Animation: " + (str(pm.get_meta("anim_status", "?")) if pm else "no player model")

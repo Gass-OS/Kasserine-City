@@ -1,7 +1,7 @@
 extends Node
 
 const ROAD := Color(0.16, 0.17, 0.18)
-const GROUND := Color(0.42, 0.48, 0.31)
+const GROUND := Color(0.66, 0.58, 0.4)
 
 var world: Node
 var dn
