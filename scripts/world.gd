@@ -272,7 +272,7 @@ func _create_tree(pos: Vector3, scale_factor: float):
     crown.material_override = foliage
     tree.add_child(crown)
 
-func _add_windows(cx: float, cz: float, w: float, d: float, h: float):
+func _add_windows_old(cx: float, cz: float, w: float, d: float, h: float):
     var glass = Color(0.18, 0.34, 0.42)
     var rows = int(max(1.0, floor((h - 2.0) / 2.4)))
     for row in range(rows):
@@ -326,7 +326,7 @@ func _create_animal(pos: Vector3, coat: Color, kind: String):
     label.modulate = Color(1, 1, 1, 0.85)
     animal.add_child(label)
 
-func _create_car(pos: Vector3, paint: Color, angle: float) -> Node3D:
+func _create_car_old(pos: Vector3, paint: Color, angle: float) -> Node3D:
     var car = Node3D.new()
     car.name = "ParkedCar"
     car.position = pos
@@ -394,7 +394,7 @@ func _create_landmark_building(title: String, pos: Vector3,
     sign.modulate = Color(1.0, 0.91, 0.62)
     add_child(sign)
 
-func _create_street_lamp(pos: Vector3):
+func _create_street_lamp_old(pos: Vector3):
     var lamp := Node3D.new()
     lamp.name = "StreetLamp"
     lamp.position = pos
@@ -455,3 +455,249 @@ func _process(delta):
             sin(angle) * 1.2, 0, cos(angle) * 0.9
         )
         animal_nodes[i].rotation.y = angle
+
+
+# ===== Stage 2: modern look + night lighting =====
+var glow_materials: Array = []
+var _glow_cache := {}
+var _pool_material: StandardMaterial3D
+
+func _glow_mat(color: Color, energy: float) -> StandardMaterial3D:
+    var key := "%s_%s" % [color.to_html(), energy]
+    if _glow_cache.has(key):
+        return _glow_cache[key]
+    var m := StandardMaterial3D.new()
+    m.albedo_color = color.darkened(0.55)
+    m.emission_enabled = true
+    m.emission = color
+    m.emission_energy_multiplier = 0.0
+    m.set_meta("glow", energy)
+    glow_materials.append(m)
+    _glow_cache[key] = m
+    return m
+
+func _pool_mat() -> StandardMaterial3D:
+    if _pool_material != null:
+        return _pool_material
+    var g := Gradient.new()
+    g.colors = PackedColorArray([Color(1, 1, 1), Color(0, 0, 0)])
+    g.offsets = PackedFloat32Array([0.0, 1.0])
+    var tex := GradientTexture2D.new()
+    tex.gradient = g
+    tex.fill = GradientTexture2D.FILL_RADIAL
+    tex.fill_from = Vector2(0.5, 0.5)
+    tex.fill_to = Vector2(1.0, 0.5)
+    tex.width = 128
+    tex.height = 128
+    var m := StandardMaterial3D.new()
+    m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+    m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+    m.albedo_texture = tex
+    m.albedo_color = Color(0, 0, 0, 1)
+    m.set_meta("pool", true)
+    glow_materials.append(m)
+    _pool_material = m
+    return m
+
+func _glass_mat() -> StandardMaterial3D:
+    var key := "glass"
+    if _glow_cache.has(key):
+        return _glow_cache[key]
+    var m := StandardMaterial3D.new()
+    m.albedo_color = Color(0.13, 0.2, 0.28)
+    m.metallic = 0.6
+    m.roughness = 0.15
+    _glow_cache[key] = m
+    return m
+
+func _glow_dot(pos: Vector3, color: Color, size: float, energy: float):
+    var mi := MeshInstance3D.new()
+    var s := SphereMesh.new()
+    s.radius = size
+    s.height = size * 2.0
+    s.radial_segments = 8
+    s.rings = 4
+    mi.mesh = s
+    mi.material_override = _glow_mat(color, energy)
+    mi.position = pos
+    mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    add_child(mi)
+
+func _window_multimesh(xforms: Array, mat: Material):
+    if xforms.is_empty():
+        return
+    var mm := MultiMesh.new()
+    mm.transform_format = MultiMesh.TRANSFORM_3D
+    var quad := QuadMesh.new()
+    quad.size = Vector2(1.3, 1.8)
+    mm.mesh = quad
+    mm.instance_count = xforms.size()
+    for i in range(xforms.size()):
+        mm.set_instance_transform(i, xforms[i])
+    var inst := MultiMeshInstance3D.new()
+    inst.multimesh = mm
+    inst.material_override = mat
+    inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    add_child(inst)
+
+func _add_windows(cx: float, cz: float, w: float, d: float, h: float):
+    var rng := RandomNumberGenerator.new()
+    rng.seed = int(absf(cx) * 73.0 + absf(cz) * 131.0 + h * 17.0) + 11
+    var floors := int((h - 2.0) / 3.2)
+    var tone := Color.from_hsv(rng.randf_range(0.04, 0.12), rng.randf_range(0.03, 0.14), rng.randf_range(0.68, 0.88))
+    if floors >= 1:
+        var lit_xf: Array = []
+        var dark_xf: Array = []
+        var faces := [
+            [Vector3(0, 0, d * 0.5 + 0.04), 0.0, w],
+            [Vector3(0, 0, -d * 0.5 - 0.04), PI, w],
+            [Vector3(w * 0.5 + 0.04, 0, 0), PI * 0.5, d],
+            [Vector3(-w * 0.5 - 0.04, 0, 0), -PI * 0.5, d],
+        ]
+        for face in faces:
+            var origin: Vector3 = face[0]
+            var yaw: float = face[1]
+            var span: float = face[2]
+            var cols := int(span / 2.6)
+            if cols < 1:
+                continue
+            var spacing := span / float(cols)
+            var bs := Basis(Vector3.UP, yaw)
+            for c in range(cols):
+                var along := -span * 0.5 + (c + 0.5) * spacing
+                for r in range(floors):
+                    var offset := Vector3(along, 2.4 + r * 3.2, 0.0)
+                    var xf := Transform3D(bs, Vector3(cx, 0.0, cz) + origin + bs * offset)
+                    if rng.randf() < 0.5:
+                        lit_xf.append(xf)
+                    else:
+                        dark_xf.append(xf)
+        _window_multimesh(dark_xf, _glass_mat())
+        _window_multimesh(lit_xf, _glow_mat(Color(1.0, 0.82, 0.5), 2.2))
+        for r in range(3, floors, 3):
+            _box(self, Vector3(w + 0.3, 0.22, d + 0.3), Vector3(cx, 0.8 + r * 3.2, cz), tone)
+    _box(self, Vector3(w + 0.2, 0.5, d + 0.2), Vector3(cx, h + 0.25, cz), tone)
+    if floors >= 3:
+        var crown_h := 2.4
+        _box(self, Vector3(w * 0.62, crown_h, d * 0.62), Vector3(cx, h + 0.5 + crown_h * 0.5, cz), tone.darkened(0.35))
+        _box(self, Vector3(w * 0.3, 0.9, d * 0.3), Vector3(cx + w * 0.12, h + 0.5 + crown_h + 0.45, cz - d * 0.1), tone)
+        if h > 16.0:
+            var top := h + 0.5 + crown_h
+            _box(self, Vector3(0.1, 4.5, 0.1), Vector3(cx, top + 2.25, cz), Color(0.2, 0.2, 0.22))
+            _glow_dot(Vector3(cx, top + 4.6, cz), Color(1.0, 0.1, 0.1), 0.18, 4.0)
+
+func _create_street_lamp(pos: Vector3):
+    var lamp := Node3D.new()
+    lamp.name = "StreetLamp"
+    lamp.position = pos
+    add_child(lamp)
+    var metal := Color(0.16, 0.17, 0.19)
+    _box(lamp, Vector3(0.14, 4.4, 0.14), Vector3(0, 2.2, 0), metal)
+    _box(lamp, Vector3(1.1, 0.1, 0.12), Vector3(0.45, 4.35, 0), metal)
+    var head := MeshInstance3D.new()
+    var hm := BoxMesh.new()
+    hm.size = Vector3(0.7, 0.08, 0.3)
+    head.mesh = hm
+    head.material_override = _glow_mat(Color(1.0, 0.85, 0.5), 3.0)
+    head.position = Vector3(0.85, 4.28, 0)
+    head.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    lamp.add_child(head)
+    var pool := MeshInstance3D.new()
+    var pq := QuadMesh.new()
+    pq.size = Vector2(8, 8)
+    pool.mesh = pq
+    pool.material_override = _pool_mat()
+    pool.rotation_degrees.x = -90
+    pool.position = Vector3(0.85, 0.22, 0)
+    pool.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    lamp.add_child(pool)
+
+func _car_mesh(car: Node3D, mesh: Mesh, pos: Vector3, mat: Material, rot_y := 0.0) -> MeshInstance3D:
+    var mi := MeshInstance3D.new()
+    mi.mesh = mesh
+    mi.material_override = mat
+    mi.position = pos
+    mi.rotation_degrees.y = rot_y
+    car.add_child(mi)
+    return mi
+
+func _car_box(car: Node3D, size: Vector3, pos: Vector3, mat: Material) -> MeshInstance3D:
+    var bm := BoxMesh.new()
+    bm.size = size
+    return _car_mesh(car, bm, pos, mat)
+
+func _create_car(pos: Vector3, paint: Color, angle: float) -> Node3D:
+    var car := Node3D.new()
+    car.name = "ParkedCar"
+    car.position = pos
+    car.rotation.y = angle
+    add_child(car)
+
+    var body := StandardMaterial3D.new()
+    body.albedo_color = paint
+    body.metallic = 0.65
+    body.roughness = 0.28
+    var glass := StandardMaterial3D.new()
+    glass.albedo_color = Color(0.05, 0.09, 0.13)
+    glass.metallic = 0.8
+    glass.roughness = 0.08
+    var trim := StandardMaterial3D.new()
+    trim.albedo_color = Color(0.04, 0.04, 0.05)
+    trim.roughness = 0.7
+
+    _car_box(car, Vector3(1.86, 0.55, 4.3), Vector3(0, 0.62, 0), body)
+    _car_box(car, Vector3(1.84, 0.12, 4.32), Vector3(0, 0.42, 0), trim)
+    _car_box(car, Vector3(1.6, 0.5, 1.5), Vector3(0, 1.145, 0.15), glass)
+    _car_box(car, Vector3(1.6, 0.07, 1.5), Vector3(0, 1.43, 0.15), body)
+    var wf := PrismMesh.new()
+    wf.left_to_right = 0.0
+    wf.size = Vector3(0.9, 0.5, 1.6)
+    _car_mesh(car, wf, Vector3(0, 1.145, -1.05), glass, 90.0)
+    var wr := PrismMesh.new()
+    wr.left_to_right = 1.0
+    wr.size = Vector3(0.6, 0.5, 1.6)
+    _car_mesh(car, wr, Vector3(0, 1.145, 1.2), glass, 90.0)
+
+    var rubber := StandardMaterial3D.new()
+    rubber.albedo_color = Color(0.05, 0.05, 0.06)
+    rubber.roughness = 0.9
+    var rim := StandardMaterial3D.new()
+    rim.albedo_color = Color(0.75, 0.77, 0.8)
+    rim.metallic = 0.9
+    rim.roughness = 0.25
+    for side in [-1.0, 1.0]:
+        for end in [-1.0, 1.0]:
+            var wm := CylinderMesh.new()
+            wm.top_radius = 0.34
+            wm.bottom_radius = 0.34
+            wm.height = 0.26
+            wm.radial_segments = 16
+            var wheel := _car_mesh(car, wm, Vector3(side * 0.88, 0.34, end * 1.3), rubber)
+            wheel.rotation_degrees.z = 90
+            var rmesh := CylinderMesh.new()
+            rmesh.top_radius = 0.2
+            rmesh.bottom_radius = 0.2
+            rmesh.height = 0.28
+            rmesh.radial_segments = 12
+            var rimn := _car_mesh(car, rmesh, Vector3(side * 0.9, 0.34, end * 1.3), rim)
+            rimn.rotation_degrees.z = 90
+
+    var head_mat := _glow_mat(Color(1.0, 0.95, 0.8), 4.0)
+    var tail_mat := _glow_mat(Color(1.0, 0.1, 0.1), 2.5)
+    for side in [-1.0, 1.0]:
+        _car_box(car, Vector3(0.4, 0.12, 0.06), Vector3(side * 0.62, 0.72, -2.17), head_mat)
+        _car_box(car, Vector3(0.4, 0.1, 0.06), Vector3(side * 0.62, 0.74, 2.17), tail_mat)
+        _car_box(car, Vector3(0.12, 0.1, 0.2), Vector3(side * 0.96, 1.0, -0.55), body)
+
+    var spot := SpotLight3D.new()
+    spot.position = Vector3(0, 0.75, -2.2)
+    spot.rotation_degrees = Vector3(-4, 0, 0)
+    spot.spot_range = 18.0
+    spot.spot_angle = 30.0
+    spot.light_color = Color(1.0, 0.92, 0.75)
+    spot.light_energy = 0.0
+    spot.visible = false
+    spot.add_to_group("car_headlight")
+    car.add_child(spot)
+    return car

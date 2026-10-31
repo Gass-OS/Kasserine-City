@@ -47,6 +47,7 @@ const NPC_CHAT = [
 func _ready():
     world = get_parent()
     player = world.get_node("Player")
+    player.look_sensitivity = 0.008 * Settings.look_sensitivity
     _create_interface()
     _add_speech_bubbles()
     _update_objective()
@@ -200,7 +201,7 @@ func _speak(message: String):
         var voice_id = str(voices[0].get("id", ""))
         DisplayServer.tts_speak(message, voice_id, 1.0, 1.0, 1.0, 1, true)
 
-func _add_speech_bubbles():
+func _add_speech_bubbles_old():
     if not world.has_method("_create_people"):
         return
     for citizen in world.citizens:
@@ -267,3 +268,7 @@ func _process(delta):
         if bubble_time <= 0.0:
             for bubble in speech_bubbles:
                 bubble.visible = false
+
+
+func _add_speech_bubbles():
+    pass
