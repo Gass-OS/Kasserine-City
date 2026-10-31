@@ -102,6 +102,16 @@ func _create_city():
 
 
 var citizens: Array[Node3D] = []
+var citizen_routes: Array = []
+var citizen_route_indices: Array[int] = []
+var citizen_speeds: Array[float] = []
+var citizen_waits: Array[float] = []
+var city_clock := 0.0
+
+var traffic_cars: Array[Node3D] = []
+var traffic_paths: Array = []
+var traffic_targets: Array[int] = []
+var traffic_speeds: Array[float] = []
 
 func _create_people():
     var places = [
@@ -124,6 +134,22 @@ func _create_people():
         citizens.append(person)
         _human(person, i)
 
+        # Keep Amine in place so the introductory mission remains reliable.
+        var route: Array[Vector3] = []
+        if i > 0:
+            var start: Vector3 = places[i]
+            var offset := 2.0 + float(i % 3) * 0.45
+            route = [
+                start,
+                start + Vector3(offset, 0, 0),
+                start + Vector3(offset, 0, offset),
+                start + Vector3(0, 0, offset)
+            ]
+        citizen_routes.append(route)
+        citizen_route_indices.append(1 if i > 0 else 0)
+        citizen_speeds.append(0.75 + float(i % 4) * 0.18)
+        citizen_waits.append(float(i % 3) * 0.6)
+
     var guide = Label3D.new()
     guide.text = "AMINE - MISSIONS"
     guide.font_size = 36
@@ -133,6 +159,15 @@ func _create_people():
 
     _landmark("MARKET", Vector3(-24, 3, 0))
     _landmark("GARAGE", Vector3(24, 3, 0))
+
+    _create_landmark_building("SCHOOL", Vector3(-36, 0, -36),
+        Vector3(10, 5, 9), Color(0.82, 0.69, 0.43))
+    _create_landmark_building("POLICE", Vector3(36, 0, -36),
+        Vector3(9, 5, 9), Color(0.48, 0.59, 0.72))
+    _create_landmark_building("HOSPITAL", Vector3(-36, 0, 36),
+        Vector3(11, 5.5, 10), Color(0.82, 0.84, 0.79))
+    _create_landmark_building("CAFE", Vector3(36, 0, 36),
+        Vector3(8, 3.5, 8), Color(0.73, 0.48, 0.31))
 
 func _human(root: Node3D, index: int):
     var model = CharacterModel.build(index)
@@ -196,11 +231,24 @@ func _create_nature_and_vehicles():
     _create_animal(Vector3(-42, 0, -15), Color(0.75, 0.68, 0.52), "CAT")
     _create_animal(Vector3(68, 0, 68), Color(0.46, 0.28, 0.14), "DOG")
 
-    _create_car(Vector3(5.0, 0, -12), Color(0.72, 0.12, 0.10), 0.0)
-    _create_car(Vector3(-5.0, 0, 12), Color(0.12, 0.32, 0.72), PI)
-    _create_car(Vector3(29.0, 0, -36), Color(0.82, 0.78, 0.63), 0.0)
-    _create_car(Vector3(-19.0, 0, 36), Color(0.15, 0.48, 0.28), PI)
-    _create_car(Vector3(53.0, 0, 12), Color(0.12, 0.12, 0.14), PI)
+    _create_street_lights()
+
+    # Five AI cars follow connected loops on the actual road grid.
+    _create_traffic_car(Vector3(-24, 0, -24), Color(0.72, 0.12, 0.10),
+        [Vector3(-24, 0, -24), Vector3(0, 0, -24),
+         Vector3(0, 0, 0), Vector3(-24, 0, 0)], 4.2)
+    _create_traffic_car(Vector3(0, 0, -24), Color(0.12, 0.32, 0.72),
+        [Vector3(0, 0, -24), Vector3(24, 0, -24),
+         Vector3(24, 0, 0), Vector3(0, 0, 0)], 4.6)
+    _create_traffic_car(Vector3(-24, 0, 0), Color(0.82, 0.78, 0.63),
+        [Vector3(-24, 0, 0), Vector3(-24, 0, 24),
+         Vector3(0, 0, 24), Vector3(0, 0, 0)], 3.8)
+    _create_traffic_car(Vector3(0, 0, 0), Color(0.15, 0.48, 0.28),
+        [Vector3(0, 0, 0), Vector3(24, 0, 0),
+         Vector3(24, 0, 24), Vector3(0, 0, 24)], 4.4)
+    _create_traffic_car(Vector3(24, 0, 0), Color(0.12, 0.12, 0.14),
+        [Vector3(24, 0, 0), Vector3(48, 0, 0),
+         Vector3(48, 0, 24), Vector3(24, 0, 24)], 4.0)
 
 func _create_tree(pos: Vector3, scale_factor: float):
     var tree = Node3D.new()
@@ -278,7 +326,7 @@ func _create_animal(pos: Vector3, coat: Color, kind: String):
     label.modulate = Color(1, 1, 1, 0.85)
     animal.add_child(label)
 
-func _create_car(pos: Vector3, paint: Color, angle: float):
+func _create_car(pos: Vector3, paint: Color, angle: float) -> Node3D:
     var car = Node3D.new()
     car.name = "ParkedCar"
     car.position = pos
@@ -304,7 +352,102 @@ func _create_car(pos: Vector3, paint: Color, angle: float):
             wheel.material_override = rubber
             car.add_child(wheel)
 
+    return car
+
+func _create_traffic_car(start: Vector3, paint: Color,
+        route: Array, speed: float):
+    var car := _create_car(start, paint, 0.0)
+    traffic_cars.append(car)
+    traffic_paths.append(route)
+    traffic_targets.append(1)
+    traffic_speeds.append(speed)
+
+func _update_traffic(delta: float):
+    for i in range(traffic_cars.size()):
+        var car: Node3D = traffic_cars[i]
+        var route: Array = traffic_paths[i]
+        if route.size() < 2:
+            continue
+
+        var target: Vector3 = route[traffic_targets[i]]
+        var difference := target - car.position
+        difference.y = 0.0
+        var distance := difference.length()
+
+        if distance < 0.65:
+            traffic_targets[i] = (traffic_targets[i] + 1) % route.size()
+            continue
+
+        var direction := difference.normalized()
+        car.position += direction * minf(traffic_speeds[i] * delta, distance)
+        car.rotation.y = atan2(-direction.x, -direction.z)
+
+func _create_landmark_building(title: String, pos: Vector3,
+        size: Vector3, color: Color):
+    _box(self, size, pos + Vector3(0, size.y * 0.5, 0), color, true)
+    _add_windows(pos.x, pos.z, size.x, size.z, size.y)
+
+    var sign := Label3D.new()
+    sign.text = title
+    sign.font_size = 32
+    sign.position = pos + Vector3(0, size.y + 1.0, 0)
+    sign.modulate = Color(1.0, 0.91, 0.62)
+    add_child(sign)
+
+func _create_street_lamp(pos: Vector3):
+    var lamp := Node3D.new()
+    lamp.name = "StreetLamp"
+    lamp.position = pos
+    add_child(lamp)
+
+    _box(lamp, Vector3(0.18, 3.6, 0.18),
+        Vector3(0, 1.8, 0), Color(0.16, 0.17, 0.19))
+    _box(lamp, Vector3(0.9, 0.14, 0.18),
+        Vector3(0.35, 3.5, 0), Color(0.16, 0.17, 0.19))
+    _box(lamp, Vector3(0.45, 0.2, 0.36),
+        Vector3(0.72, 3.42, 0), Color(1.0, 0.88, 0.55))
+
+func _create_street_lights():
+    # Lamps stand just outside the 8 m roads, clear of the lane centers.
+    for road_index in range(-3, 4):
+        var p := float(road_index) * 24.0
+        for side in [-1.0, 1.0]:
+            for along in range(-3, 4):
+                var q := float(along) * 24.0
+                _create_street_lamp(Vector3(p + side * 5.2, 0, q + 5.2))
+
+func _update_pedestrians(delta: float):
+    for i in range(citizens.size()):
+        var route: Array = citizen_routes[i]
+        if route.size() < 2:
+            continue
+
+        if citizen_waits[i] > 0.0:
+            citizen_waits[i] = maxf(0.0, citizen_waits[i] - delta)
+            continue
+
+        var person := citizens[i]
+        var target: Vector3 = route[citizen_route_indices[i]]
+        var current := person.position
+        var difference := target - current
+        difference.y = 0.0
+
+        if difference.length() < 0.18:
+            citizen_route_indices[i] = (
+                citizen_route_indices[i] + 1
+            ) % route.size()
+            citizen_waits[i] = 0.3 + float(i % 4) * 0.35
+            continue
+
+        var direction := difference.normalized()
+        person.position += direction * citizen_speeds[i] * delta
+        person.rotation.y = atan2(-direction.x, -direction.z)
+
 func _process(delta):
+    city_clock += delta
+    _update_pedestrians(delta)
+    _update_traffic(delta)
+
     animal_clock += delta
     for i in range(animal_nodes.size()):
         var angle = animal_clock * 0.32 + float(i) * 1.7

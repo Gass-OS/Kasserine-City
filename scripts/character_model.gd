@@ -24,6 +24,7 @@ static func build(skin_index: int) -> Node3D:
         _apply_skin(model, texture)
 
     model.name = "KenneyCharacter"
+    model.scale = Vector3.ONE * 0.45
     return model
 
 static func _apply_skin(node: Node, texture: Texture2D) -> void:
