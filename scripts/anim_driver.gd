@@ -14,7 +14,7 @@ func _ready() -> void:
     layer.layer = 20
     add_child(layer)
     label = Label.new()
-    label.position = Vector2(20, 270)
+    label.position = Vector2(20, 370)
     label.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
     label.custom_minimum_size = Vector2(900, 0)
     label.add_theme_font_size_override("font_size", 13)

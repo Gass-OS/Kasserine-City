@@ -11,6 +11,7 @@ func _ready() -> void:
     _parked_cars()
     _souk()
     _fountain()
+    _trees()
 
 func _parked_cars() -> void:
     var rng := RandomNumberGenerator.new()
@@ -118,3 +119,43 @@ func _fountain() -> void:
     shape.position = Vector3(0, 0.4, 0)
     body.add_child(shape)
     root.add_child(body)
+
+const KenneyKit = preload("res://scripts/kenney.gd")
+
+func _trees() -> void:
+    var rng := RandomNumberGenerator.new()
+    rng.seed = 909
+    var big: Array = []
+    var small: Array = []
+    var sb := KenneyKit.height_scale("res://assets/kenney/suburban/tree-large.glb", 6.5)
+    var ss := KenneyKit.height_scale("res://assets/kenney/suburban/tree-small.glb", 4.0)
+    if sb <= 0.0 and ss <= 0.0:
+        return
+    for i in range(-4, 5):
+        for j in range(-4, 4):
+            for side in [-1.0, 1.0]:
+                for off in [8.0, 16.0]:
+                    var along := float(j) * 24.0 + off + rng.randf_range(-0.6, 0.6)
+                    var p := float(i) * 24.0
+                    _add_tree(Vector3(along, 0.0, p + side * 4.9), rng, big, small, sb, ss)
+                    if absi(i) >= 3:
+                        _add_tree(Vector3(p + side * 4.9, 0.0, along), rng, big, small, sb, ss)
+    KenneyKit.scatter("res://assets/kenney/suburban/tree-large.glb", big, world, true)
+    KenneyKit.scatter("res://assets/kenney/suburban/tree-small.glb", small, world, false)
+
+func _add_tree(pos: Vector3, rng: RandomNumberGenerator, big: Array, small: Array, sb: float, ss: float) -> void:
+    if rng.randf() < 0.3:
+        return
+    var yaw := rng.randf() * TAU
+    var use_big := rng.randf() < 0.5
+    var s := ss
+    if use_big:
+        s = sb
+    s *= rng.randf_range(0.85, 1.2)
+    if s <= 0.0:
+        return
+    var xf := Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3.ONE * s), pos)
+    if use_big:
+        big.append(xf)
+    else:
+        small.append(xf)

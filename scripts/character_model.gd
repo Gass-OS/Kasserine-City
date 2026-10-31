@@ -25,6 +25,7 @@ static func build(skin_index: int) -> Node3D:
 
     model.name = "KenneyCharacter"
     model.scale = Vector3.ONE * 0.45
+    model.rotation.y = PI
     preload("res://scripts/anim_helper.gd").setup(model)
     return model
 

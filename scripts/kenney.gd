@@ -125,3 +125,46 @@ static func building(cx: float, cz: float, w: float, d: float, h: float, seed_va
     body.add_child(shape)
     holder.add_child(body)
     return holder
+
+static func height_scale(path: String, target: float) -> float:
+    var ps := _scene(path)
+    if ps == null:
+        return 0.0
+    var inst := ps.instantiate() as Node3D
+    if inst == null:
+        return 0.0
+    var a := _aabb(inst)
+    inst.free()
+    if a.size.y < 0.01:
+        return 0.0
+    return target / a.size.y
+
+static func scatter(path: String, xforms: Array, parent: Node, shadows := false) -> int:
+    var ps := _scene(path)
+    if ps == null or xforms.is_empty():
+        return 0
+    var inst := ps.instantiate() as Node3D
+    if inst == null:
+        return 0
+    var meshes: Array = []
+    _collect(inst, meshes)
+    var made := 0
+    for mi in meshes:
+        var m := mi as MeshInstance3D
+        if m.mesh == null:
+            continue
+        var rel := _rel_xform(m, inst)
+        var mm := MultiMesh.new()
+        mm.transform_format = MultiMesh.TRANSFORM_3D
+        mm.mesh = m.mesh
+        mm.instance_count = xforms.size()
+        for i in range(xforms.size()):
+            mm.set_instance_transform(i, (xforms[i] as Transform3D) * rel)
+        var mmi := MultiMeshInstance3D.new()
+        mmi.multimesh = mm
+        if not shadows:
+            mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+        parent.add_child(mmi)
+        made += 1
+    inst.free()
+    return made
