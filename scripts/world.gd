@@ -71,16 +71,6 @@ func _create_city():
             _box(self, Vector3(0.16, 0.02, 2.5), Vector3(p, 0.075, j * 11.0), line)
             _box(self, Vector3(2.5, 0.02, 0.16), Vector3(j * 11.0, 0.08, p), line)
 
-    # Sidewalks on both sides of every road, outside the driving lanes.
-    var sidewalk = Color(0.64, 0.62, 0.55)
-    for i in range(-4, 5):
-        var p := float(i) * 24.0
-        for side in [-1.0, 1.0]:
-            _box(self, Vector3(1.4, 0.08, 210),
-                Vector3(p + side * 4.8, 0.0, 0), sidewalk)
-            _box(self, Vector3(210, 0.08, 1.4),
-                Vector3(0, 0.0, p + side * 4.8), sidewalk)
-
     var rng = RandomNumberGenerator.new()
     rng.seed = 302610
     var palette = [
@@ -91,33 +81,16 @@ func _create_city():
         Color(0.68, 0.59, 0.46)
     ]
 
-    # CITY_LAYOUT_V2: buildings occupy the blocks BETWEEN roads.
-    # Road centres are 24 m apart and each road is 8 m wide.
-    for x in range(-4, 4):
-        for z in range(-4, 4):
-            var cx: float = (float(x) + 0.5) * 24.0
-            var cz: float = (float(z) + 0.5) * 24.0
-
-            # Keep the central four plots open for the town centre.
-            var is_center_plaza := absf(cx) == 12.0 and absf(cz) == 12.0
-
-            # Reserve plots for SCHOOL, POLICE, HOSPITAL and CAFE.
-            var is_landmark_plot := absf(cx) == 36.0 and absf(cz) == 36.0
-
-            # Reserve four plots around the outer town for parks and a kiosk.
-            var is_service_plot := absf(cx) == 60.0 and absf(cz) == 60.0
-
-            if is_center_plaza or is_landmark_plot or is_service_plot:
+    for x in range(-4, 5):
+        for z in range(-4, 5):
+            if abs(x) <= 1 and abs(z) <= 1:
                 continue
-
-            # Small variation within the plot; keep generous road clearance.
-            cx += rng.randf_range(-1.0, 1.0)
-            cz += rng.randf_range(-1.0, 1.0)
-            var w = rng.randf_range(7.0, 10.0)
-            var d = rng.randf_range(7.0, 10.0)
-            var h = rng.randf_range(4.0, 11.0)
-            _box(self, Vector3(w, h, d), Vector3(cx, h / 2.0, cz),
-                palette[rng.randi_range(0, palette.size() - 1)], true)
+            var cx = x * 24.0 + rng.randf_range(-4, 4)
+            var cz = z * 24.0 + rng.randf_range(-4, 4)
+            var w = rng.randf_range(7.0, 11.0)
+            var d = rng.randf_range(7.0, 11.0)
+            var h = rng.randf_range(4.0, 13.0)
+            _box(self, Vector3(w, h, d), Vector3(cx, h / 2.0, cz), palette[rng.randi_range(0, palette.size() - 1)], true)
             _add_windows(cx, cz, w, d, h)
 
     var sign = Label3D.new()
@@ -259,7 +232,6 @@ func _create_nature_and_vehicles():
     _create_animal(Vector3(68, 0, 68), Color(0.46, 0.28, 0.14), "DOG")
 
     _create_street_lights()
-    _create_city_details()
 
     # Five AI cars follow connected loops on the actual road grid.
     _create_traffic_car(Vector3(-24, 0, -24), Color(0.72, 0.12, 0.10),
@@ -443,103 +415,6 @@ func _create_street_lights():
             for along in range(-3, 4):
                 var q := float(along) * 24.0
                 _create_street_lamp(Vector3(p + side * 5.2, 0, q + 5.2))
-
-# Extra town scenery: small parks, café terrace, planters and kiosk.
-func _create_city_details():
-    # Three pocket parks occupy plots intentionally left free of buildings.
-    var park_centres = [
-        Vector3(-60, 0, -60),
-        Vector3(60, 0, -60),
-        Vector3(-60, 0, 60)
-    ]
-    for centre in park_centres:
-        for dx in [-4.0, 4.0]:
-            for dz in [-4.0, 4.0]:
-                _create_tree(centre + Vector3(dx, 0, dz), 0.78)
-        _create_bench(centre + Vector3(0, 0, -6.0))
-        _create_planter(centre + Vector3(-6.0, 0, 0), Color(0.18, 0.42, 0.20))
-        _create_planter(centre + Vector3(6.0, 0, 0), Color(0.24, 0.48, 0.22))
-
-    # A small magazine kiosk in its own reserved plot.
-    var kiosk := Node3D.new()
-    kiosk.name = "MagazineKiosk"
-    kiosk.position = Vector3(60, 0, 60)
-    add_child(kiosk)
-    _box(kiosk, Vector3(3.4, 2.35, 2.4), Vector3(0, 1.175, 0),
-        Color(0.79, 0.67, 0.45), true)
-    _box(kiosk, Vector3(3.8, 0.16, 2.8), Vector3(0, 2.42, 0),
-        Color(0.72, 0.16, 0.12))
-    _box(kiosk, Vector3(2.2, 0.9, 0.10), Vector3(0, 1.35, -1.25),
-        Color(0.22, 0.36, 0.42))
-    _box(kiosk, Vector3(2.4, 0.12, 0.55), Vector3(0, 1.0, -1.55),
-        Color(0.45, 0.25, 0.13))
-    var kiosk_label := Label3D.new()
-    kiosk_label.text = "MAGAZINES"
-    kiosk_label.font_size = 24
-    kiosk_label.position = Vector3(0, 2.0, -1.34)
-    kiosk_label.modulate = Color(1.0, 0.95, 0.75)
-    kiosk.add_child(kiosk_label)
-    _create_planter(Vector3(57.7, 0, 62.0), Color(0.18, 0.42, 0.20))
-    _create_planter(Vector3(62.3, 0, 62.0), Color(0.24, 0.48, 0.22))
-
-    # Café terrace beside the CAFE building at (36, 36).
-    for z in [34.0, 38.0]:
-        _create_cafe_table(Vector3(41.5, 0, z))
-    _create_planter(Vector3(41.4, 0, 31.5), Color(0.72, 0.25, 0.24))
-    _create_planter(Vector3(41.4, 0, 40.5), Color(0.20, 0.42, 0.20))
-
-func _create_planter(pos: Vector3, leaf_colour: Color):
-    var pot := Node3D.new()
-    pot.name = "FlowerPot"
-    pot.position = pos
-    add_child(pot)
-    _box(pot, Vector3(0.72, 0.42, 0.72), Vector3(0, 0.21, 0),
-        Color(0.60, 0.31, 0.19))
-    var plant := MeshInstance3D.new()
-    var plant_mesh := SphereMesh.new()
-    plant_mesh.radius = 0.34
-    plant_mesh.height = 0.65
-    plant.mesh = plant_mesh
-    plant.position.y = 0.58
-    var material := StandardMaterial3D.new()
-    material.albedo_color = leaf_colour
-    material.roughness = 1.0
-    plant.material_override = material
-    pot.add_child(plant)
-
-func _create_bench(pos: Vector3):
-    var bench := Node3D.new()
-    bench.name = "ParkBench"
-    bench.position = pos
-    add_child(bench)
-    var wood := Color(0.39, 0.23, 0.13)
-    var metal := Color(0.17, 0.18, 0.19)
-    _box(bench, Vector3(1.65, 0.13, 0.48), Vector3(0, 0.52, 0), wood)
-    _box(bench, Vector3(1.65, 0.12, 0.12), Vector3(0, 0.88, -0.19), wood)
-    for x in [-0.62, 0.62]:
-        _box(bench, Vector3(0.12, 0.48, 0.12), Vector3(x, 0.26, 0), metal)
-        _box(bench, Vector3(0.12, 0.45, 0.12), Vector3(x, 0.70, -0.19), metal)
-
-func _create_cafe_table(pos: Vector3):
-    var table := Node3D.new()
-    table.name = "CafeTable"
-    table.position = pos
-    add_child(table)
-    _box(table, Vector3(0.95, 0.10, 0.95), Vector3(0, 0.78, 0),
-        Color(0.48, 0.27, 0.15))
-    _box(table, Vector3(0.14, 0.72, 0.14), Vector3(0, 0.38, 0),
-        Color(0.22, 0.22, 0.23))
-    for side in [-1.0, 1.0]:
-        var chair_x := side * 0.88
-        _box(table, Vector3(0.48, 0.10, 0.48),
-            Vector3(chair_x, 0.43, 0), Color(0.18, 0.31, 0.42))
-        _box(table, Vector3(0.48, 0.48, 0.10),
-            Vector3(chair_x, 0.68, -0.19), Color(0.18, 0.31, 0.42))
-        for leg_x in [-0.16, 0.16]:
-            _box(table, Vector3(0.07, 0.42, 0.07),
-                Vector3(chair_x + leg_x, 0.21, -0.12), Color(0.16, 0.17, 0.18))
-            _box(table, Vector3(0.07, 0.42, 0.07),
-                Vector3(chair_x + leg_x, 0.21, 0.12), Color(0.16, 0.17, 0.18))
 
 func _update_pedestrians(delta: float):
     for i in range(citizens.size()):
