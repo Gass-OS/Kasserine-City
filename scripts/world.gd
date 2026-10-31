@@ -5,6 +5,7 @@ const PlayerScript = preload("res://scripts/player.gd")
 func _ready():
     _create_environment()
     _create_city()
+    _create_nature_and_vehicles()
     var player = CharacterBody3D.new()
     player.set_script(PlayerScript)
     player.name = "Player"
@@ -89,6 +90,7 @@ func _create_city():
             var d = rng.randf_range(7.0, 11.0)
             var h = rng.randf_range(4.0, 13.0)
             _box(self, Vector3(w, h, d), Vector3(cx, h / 2.0, cz), palette[rng.randi_range(0, palette.size() - 1)], true)
+            _add_windows(cx, cz, w, d, h)
 
     var sign = Label3D.new()
     sign.text = "KASSERINE CITY"
@@ -158,3 +160,146 @@ func _landmark(title: String, pos: Vector3):
 
 func interact():
     get_node("Gameplay").interact()
+
+
+var animal_nodes: Array[Node3D] = []
+var animal_origins: Array[Vector3] = []
+var animal_clock := 0.0
+
+func _create_nature_and_vehicles():
+    var tree_positions = [
+        Vector3(-94, 0, -90), Vector3(-72, 0, -94),
+        Vector3(-48, 0, -94), Vector3(-20, 0, -94),
+        Vector3(20, 0, -94), Vector3(48, 0, -94),
+        Vector3(72, 0, -94), Vector3(94, 0, -70),
+        Vector3(94, 0, -35), Vector3(94, 0, 10),
+        Vector3(94, 0, 48), Vector3(70, 0, 94),
+        Vector3(38, 0, 94), Vector3(0, 0, 94),
+        Vector3(-38, 0, 94), Vector3(-75, 0, 70),
+        Vector3(-94, 0, 35), Vector3(-94, 0, 0)
+    ]
+    for i in range(tree_positions.size()):
+        _create_tree(tree_positions[i], 0.8 + float(i % 4) * 0.12)
+
+    _create_animal(Vector3(-12, 0, 9), Color(0.55, 0.32, 0.16), "DOG")
+    _create_animal(Vector3(12, 0, -10), Color(0.72, 0.65, 0.48), "CAT")
+    _create_animal(Vector3(42, 0, 15), Color(0.36, 0.30, 0.24), "DOG")
+    _create_animal(Vector3(-42, 0, -15), Color(0.75, 0.68, 0.52), "CAT")
+    _create_animal(Vector3(68, 0, 68), Color(0.46, 0.28, 0.14), "DOG")
+
+    _create_car(Vector3(5.0, 0, -12), Color(0.72, 0.12, 0.10), 0.0)
+    _create_car(Vector3(-5.0, 0, 12), Color(0.12, 0.32, 0.72), PI)
+    _create_car(Vector3(29.0, 0, -36), Color(0.82, 0.78, 0.63), 0.0)
+    _create_car(Vector3(-19.0, 0, 36), Color(0.15, 0.48, 0.28), PI)
+    _create_car(Vector3(53.0, 0, 12), Color(0.12, 0.12, 0.14), PI)
+
+func _create_tree(pos: Vector3, scale_factor: float):
+    var tree = Node3D.new()
+    tree.name = "Tree"
+    tree.position = pos
+    tree.scale = Vector3.ONE * scale_factor
+    add_child(tree)
+
+    _box(tree, Vector3(0.45, 2.4, 0.45), Vector3(0, 1.2, 0),
+        Color(0.30, 0.19, 0.10))
+
+    var crown = MeshInstance3D.new()
+    var crown_mesh = SphereMesh.new()
+    crown_mesh.radius = 1.35
+    crown_mesh.height = 2.7
+    crown.mesh = crown_mesh
+    crown.position.y = 3.0
+    var foliage = StandardMaterial3D.new()
+    foliage.albedo_color = Color(0.12, 0.35, 0.16)
+    foliage.roughness = 1.0
+    crown.material_override = foliage
+    tree.add_child(crown)
+
+func _add_windows(cx: float, cz: float, w: float, d: float, h: float):
+    var glass = Color(0.18, 0.34, 0.42)
+    var rows = int(max(1.0, floor((h - 2.0) / 2.4)))
+    for row in range(rows):
+        var wy = 1.5 + float(row) * 2.2
+        for side in [-1.0, 1.0]:
+            for col in range(2):
+                var wx = cx + (float(col) - 0.5) * w * 0.48
+                _box(self, Vector3(0.85, 0.9, 0.08),
+                    Vector3(wx, wy, cz + side * (d / 2.0 + 0.045)), glass)
+                var wz = cz + (float(col) - 0.5) * d * 0.48
+                _box(self, Vector3(0.08, 0.9, 0.85),
+                    Vector3(cx + side * (w / 2.0 + 0.045), wy, wz), glass)
+
+func _create_animal(pos: Vector3, coat: Color, kind: String):
+    var animal = Node3D.new()
+    animal.name = kind
+    animal.position = pos
+    add_child(animal)
+    animal_nodes.append(animal)
+    animal_origins.append(pos)
+
+    var body = MeshInstance3D.new()
+    var body_mesh = SphereMesh.new()
+    body_mesh.radius = 0.48 if kind == "DOG" else 0.36
+    body_mesh.height = 0.75 if kind == "DOG" else 0.58
+    body.mesh = body_mesh
+    body.position = Vector3(0, 0.58, 0)
+    var material = StandardMaterial3D.new()
+    material.albedo_color = coat
+    body.material_override = material
+    animal.add_child(body)
+
+    var head = MeshInstance3D.new()
+    var head_mesh = SphereMesh.new()
+    head_mesh.radius = 0.25
+    head_mesh.height = 0.42
+    head.mesh = head_mesh
+    head.position = Vector3(0, 0.78, -0.42)
+    head.material_override = material
+    animal.add_child(head)
+
+    for side in [-1.0, 1.0]:
+        for front in [-1.0, 1.0]:
+            _box(animal, Vector3(0.13, 0.42, 0.13),
+                Vector3(side * 0.24, 0.22, front * 0.25), coat)
+
+    var label = Label3D.new()
+    label.text = kind
+    label.font_size = 24
+    label.position.y = 1.3
+    label.modulate = Color(1, 1, 1, 0.85)
+    animal.add_child(label)
+
+func _create_car(pos: Vector3, paint: Color, angle: float):
+    var car = Node3D.new()
+    car.name = "ParkedCar"
+    car.position = pos
+    car.rotation.y = angle
+    add_child(car)
+
+    _box(car, Vector3(1.8, 0.62, 3.2), Vector3(0, 0.65, 0), paint)
+    _box(car, Vector3(1.38, 0.62, 1.55), Vector3(0, 1.15, -0.12),
+        Color(0.18, 0.25, 0.29))
+
+    for side in [-1.0, 1.0]:
+        for end in [-1.0, 1.0]:
+            var wheel = MeshInstance3D.new()
+            var wheel_mesh = CylinderMesh.new()
+            wheel_mesh.top_radius = 0.32
+            wheel_mesh.bottom_radius = 0.32
+            wheel_mesh.height = 0.18
+            wheel.mesh = wheel_mesh
+            wheel.rotation_degrees.z = 90
+            wheel.position = Vector3(side * 0.91, 0.34, end * 1.0)
+            var rubber = StandardMaterial3D.new()
+            rubber.albedo_color = Color(0.06, 0.06, 0.07)
+            wheel.material_override = rubber
+            car.add_child(wheel)
+
+func _process(delta):
+    animal_clock += delta
+    for i in range(animal_nodes.size()):
+        var angle = animal_clock * 0.32 + float(i) * 1.7
+        animal_nodes[i].position = animal_origins[i] + Vector3(
+            sin(angle) * 1.2, 0, cos(angle) * 0.9
+        )
+        animal_nodes[i].rotation.y = angle

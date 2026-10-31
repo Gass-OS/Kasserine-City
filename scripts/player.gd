@@ -3,7 +3,7 @@ extends CharacterBody3D
 const SPEED = 6.0
 const SPRINT_SPEED = 10.0
 const JUMP_SPEED = 4.5
-const LOOK_SENSITIVITY = 0.008
+var look_sensitivity := 0.008
 
 var yaw := 0.0
 var pitch := -0.22
@@ -171,9 +171,9 @@ func _input(event):
             hud.joystick_vector = touch_move
             hud.queue_redraw()
         elif event.index == look_touch:
-            yaw -= event.relative.x * LOOK_SENSITIVITY
-            pitch = clamp(pitch - event.relative.y * LOOK_SENSITIVITY, -0.75, 0.35)
-            camera_pivot.rotation.y = yaw
+            yaw -= event.relative.x * look_sensitivity
+            pitch = clamp(pitch - event.relative.y * look_sensitivity, -0.75, 0.35)
+            camera_pivot.rotation.y = yaw - rotation.y
             camera.rotation.x = pitch
 
 func _show_message(message: String):
@@ -217,6 +217,7 @@ func _physics_process(delta):
         velocity.x = direction.x * current_speed
         velocity.z = direction.z * current_speed
         rotation.y = atan2(-direction.x, -direction.z)
+        camera_pivot.rotation.y = yaw - rotation.y
     else:
         velocity.x = move_toward(velocity.x, 0, SPEED * 4 * delta)
         velocity.z = move_toward(velocity.z, 0, SPEED * 4 * delta)
