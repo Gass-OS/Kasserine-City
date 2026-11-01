@@ -1,4 +1,4 @@
-[gd_scene load_steps=19 format=3]
+[gd_scene load_steps=21 format=3]
 
 [ext_resource type="Script" path="res://scripts/world.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/daynight.gd" id="2"]
@@ -18,6 +18,8 @@
 [ext_resource type="Script" path="res://scripts/physics_plus.gd" id="16"]
 [ext_resource type="Script" path="res://scripts/disputes.gd" id="17"]
 [ext_resource type="Script" path="res://scripts/intro.gd" id="18"]
+[ext_resource type="Script" path="res://scripts/urban.gd" id="19"]
+[ext_resource type="Script" path="res://scripts/streets.gd" id="20"]
 
 [node name="KasserineCity" type="Node3D"]
 script = ExtResource("1")
@@ -72,3 +74,9 @@ script = ExtResource("17")
 
 [node name="Intro" type="Node" parent="."]
 script = ExtResource("18")
+
+[node name="Urban" type="Node" parent="."]
+script = ExtResource("19")
+
+[node name="Streets" type="Node" parent="."]
+script = ExtResource("20")

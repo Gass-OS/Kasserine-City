@@ -57,12 +57,14 @@ func _pick_pair() -> Array:
     var list: Array = bubbles.keys()
     list.shuffle()
     for a in list:
+        if a.has_meta("busy"):
+            continue
         if not is_instance_valid(a):
             continue
         if player != null and a.global_position.distance_to(player.global_position) > 35.0:
             continue
         for b in list:
-            if b != a and is_instance_valid(b) and a.global_position.distance_to(b.global_position) < 12.0:
+            if b != a and is_instance_valid(b) and not b.has_meta("busy") and a.global_position.distance_to(b.global_position) < 12.0:
                 return [a, b]
     return []
 
