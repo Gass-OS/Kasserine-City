@@ -85,16 +85,16 @@ func _box(parent: Node3D, size: Vector3, pos: Vector3, color: Color, solid := fa
         parent.add_child(body)
 
 func _create_city():
-    _box(self, Vector3(220, 1, 220), Vector3(0, -0.55, 0), Color(0.66, 0.58, 0.4), true)
+    _box(self, Vector3(312, 1, 312), Vector3(0, -0.55, 0), Color(0.66, 0.58, 0.4), true)
 
     var road = Color(0.16, 0.17, 0.18)
     var line = Color(0.92, 0.83, 0.55)
 
-    for i in range(-4, 5):
+    for i in range(-6, 7):
         var p = float(i) * 24.0
-        _box(self, Vector3(8, 0.08, 210), Vector3(p, 0.02, 0), road)
-        _box(self, Vector3(210, 0.08, 8), Vector3(0, 0.03, p), road)
-        for j in range(-9, 10):
+        _box(self, Vector3(8, 0.08, 300), Vector3(p, 0.02, 0), road)
+        _box(self, Vector3(300, 0.08, 8), Vector3(0, 0.03, p), road)
+        for j in range(-13, 14):
             _box(self, Vector3(0.16, 0.02, 2.5), Vector3(p, 0.075, j * 11.0), line)
             _box(self, Vector3(2.5, 0.02, 0.16), Vector3(j * 11.0, 0.08, p), line)
 
@@ -108,8 +108,8 @@ func _create_city():
         Color(0.68, 0.59, 0.46)
     ]
 
-    for x in range(-4, 4):
-        for z in range(-4, 4):
+    for x in range(-6, 6):
+        for z in range(-6, 6):
             if x >= -2 and x <= 1 and z >= -2 and z <= 1:
                 continue
             var cx = x * 24.0 + 12.0 + rng.randf_range(-1.5, 1.5)

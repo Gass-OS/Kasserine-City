@@ -1,7 +1,7 @@
 extends Node
 
-const NS_ROADS = ["Rue de Gafsa", "Avenue de Carthage", "Rue Ibn Khaldoun", "Avenue Habib Bourguiba", "Avenue de la République", "Rue de Kairouan", "Rue Farhat Hached", "Avenue de la Liberté", "Rue de Sfax"]
-const EW_ROADS = ["Rue de Tunis", "Avenue Mohamed V", "Rue de Sousse", "Avenue de l'Indépendance", "Avenue de la Paix", "Rue des Oliviers", "Rue du Marché", "Rue de la Médina", "Avenue des Palmiers"]
+const NS_ROADS = ["Route de Thala", "Rue du Stade", "Rue de l’Hôpital", "Boulevard des Martyrs", "Rue de Gafsa", "Avenue de Carthage", "Rue Ibn Khaldoun", "Avenue Habib Bourguiba", "Avenue de la République", "Rue de Kairouan", "Rue Farhat Hached", "Avenue de la Liberté", "Rue de Sfax"]
+const EW_ROADS = ["Route de Kasserine-Sud", "Rue des Jardins", "Rue de la Gare", "Boulevard de l’Environnement", "Rue de Tunis", "Avenue Mohamed V", "Rue de Sousse", "Avenue de l'Indépendance", "Avenue de la Paix", "Rue des Oliviers", "Rue du Marché", "Rue de la Médina", "Avenue des Palmiers"]
 
 class Mini extends Control:
     var world: Node
@@ -48,7 +48,7 @@ class Mini extends Control:
         var sn := sin(psi)
         var k := R / RANGE
         var col := Color(0.56, 0.58, 0.62)
-        for i in range(-4, 5):
+        for i in range(-6, 7):
             var p := float(i) * 24.0
             var a := p - pp.x
             if absf(a) < RANGE:
@@ -160,13 +160,13 @@ func _process(delta: float) -> void:
         coins = int(mp.get("coins"))
     money_label.text = "DT %d" % coins
     var pp := player.global_position
-    var ix := clampi(roundi(pp.x / 24.0), -4, 4)
-    var iz := clampi(roundi(pp.z / 24.0), -4, 4)
+    var ix := clampi(roundi(pp.x / 24.0), -6, 6)
+    var iz := clampi(roundi(pp.z / 24.0), -6, 6)
     var dx := absf(pp.x - float(ix) * 24.0)
     var dz := absf(pp.z - float(iz) * 24.0)
     if minf(dx, dz) > 7.0:
         street_label.text = "Kasserine"
     elif dx < dz:
-        street_label.text = NS_ROADS[ix + 4]
+        street_label.text = NS_ROADS[ix + 6]
     else:
-        street_label.text = EW_ROADS[iz + 4]
+        street_label.text = EW_ROADS[iz + 6]
