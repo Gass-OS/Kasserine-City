@@ -59,14 +59,14 @@ func _pick_pair() -> Array:
     var list: Array = bubbles.keys()
     list.shuffle()
     for a in list:
-        if a.has_meta("busy"):
-            continue
         if not is_instance_valid(a):
+            continue
+        if a.has_meta("busy"):
             continue
         if player != null and a.global_position.distance_to(player.global_position) > 35.0:
             continue
         for b in list:
-            if b != a and is_instance_valid(b) and not b.has_meta("busy") and a.global_position.distance_to(b.global_position) < 12.0:
+            if b != a and is_instance_valid(b) and not b.has_meta("busy") and a.global_position.distance_to(b.global_position) < 18.0:
                 return [a, b]
     return []
 
@@ -140,8 +140,12 @@ func _say(c: Node3D, text: String, hold: float) -> void:
         await get_tree().create_timer(0.03).timeout
 
     if voice_started:
-        while DisplayServer.tts_is_speaking():
+        var voice_wait := 0.0
+        while DisplayServer.tts_is_speaking() and voice_wait < 10.0:
             await get_tree().create_timer(0.1).timeout
+            voice_wait += 0.1
+        if DisplayServer.tts_is_speaking():
+            DisplayServer.tts_stop()
 
     await get_tree().create_timer(hold).timeout
     root.visible = false

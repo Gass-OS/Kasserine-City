@@ -69,7 +69,7 @@ func _sp(parent: Node3D, r: float, pos: Vector3, mat: Material) -> void:
     _add(parent, s, pos, mat)
 
 func _scooter() -> Node3D:
-    var root := Node3D.new()
+    var root := AnimatableBody3D.new()
     root.name = "Scooter"
     var paint := Color.from_hsv(randf(), 0.65, 0.8)
     var body := _mat(paint, 0.35, 0.4)
@@ -94,15 +94,13 @@ func _scooter() -> Node3D:
     var tl = world.call("_glow_mat", Color(1.0, 0.1, 0.1), 2.5)
     _bx(root, Vector3(0.16, 0.12, 0.05), Vector3(0, 0.98, -0.6), hl)
     _bx(root, Vector3(0.16, 0.1, 0.05), Vector3(0, 0.6, 0.68), tl)
-    var sb := StaticBody3D.new()
-    sb.name = "Hull"
+    # Keep the collider attached to the moving physics body.
     var cs := CollisionShape3D.new()
     var box := BoxShape3D.new()
     box.size = Vector3(0.7, 1.5, 1.9)
     cs.shape = box
     cs.position = Vector3(0, 0.8, 0)
-    sb.add_child(cs)
-    root.add_child(sb)
+    root.add_child(cs)
     root.set_meta("scooter", true)
     return root
 
@@ -141,7 +139,7 @@ func _spawn_fleet() -> void:
             node = _scooter()
             world.add_child(node)
         else:
-            node = world.call("_create_car", route[0], Color(rng.randf(), rng.randf(), rng.randf()), 0.0) as Node3D
+            node = world.call("_create_car", route[0], Color(rng.randf(), rng.randf(), rng.randf()), 0.0, true) as Node3D
         if node == null:
             continue
         var idx := rng.randi() % route.size()

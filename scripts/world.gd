@@ -172,7 +172,17 @@ func _create_people():
         Vector3(18, 0, 34),
         Vector3(42, 0, 10),
         Vector3(58, 0, -10),
-        Vector3(-58, 0, 10)
+        Vector3(-58, 0, 10),
+
+        # Additional residents on sidewalk-aligned positions.
+        Vector3(5.6, 0, 60),
+        Vector3(-5.6, 0, 60),
+        Vector3(5.6, 0, -60),
+        Vector3(-5.6, 0, -60),
+        Vector3(53.6, 0, 60),
+        Vector3(-53.6, 0, 60),
+        Vector3(53.6, 0, -60),
+        Vector3(-53.6, 0, -60)
     ]
     for i in range(places.size()):
         var person = Node3D.new()
@@ -186,13 +196,22 @@ func _create_people():
         var route: Array[Vector3] = []
         if i > 0:
             var start: Vector3 = places[i]
-            var offset := 2.0 + float(i % 3) * 0.45
-            route = [
-                start,
-                start + Vector3(offset, 0, 0),
-                start + Vector3(offset, 0, offset),
-                start + Vector3(0, 0, offset)
-            ]
+            if i >= 24:
+                # Keep the new residents on their sidewalk strip.
+                route = [
+                    start,
+                    start + Vector3(0, 0, 2.0),
+                    start + Vector3(0, 0, 4.0),
+                    start + Vector3(0, 0, 2.0)
+                ]
+            else:
+                var offset := 2.0 + float(i % 3) * 0.45
+                route = [
+                    start,
+                    start + Vector3(offset, 0, 0),
+                    start + Vector3(offset, 0, offset),
+                    start + Vector3(0, 0, offset)
+                ]
         citizen_routes.append(route)
         citizen_route_indices.append(1 if i > 0 else 0)
         citizen_speeds.append(0.75 + float(i % 4) * 0.18)
@@ -557,7 +576,7 @@ func _create_traffic_car(start: Vector3, paint: Color,
 func _update_traffic(delta: float) -> void:
     # Plan all vehicle movements before applying any of them.
     # This prevents cars from independently moving into the same space.
-    var min_spacing := 6.8
+    var min_spacing := 5.0
     var original_positions: Array = []
     var proposed_positions: Array = []
     var accepted_positions: Array = []
@@ -627,12 +646,39 @@ func _update_traffic(delta: float) -> void:
                 original_positions[i].z - original_positions[j].z
             ).length()
 
-            var next_gap := Vector2(
+            var offset := Vector2(
                 candidate.x - comparison_position.x,
                 candidate.z - comparison_position.z
-            ).length()
+            )
+            var next_gap := offset.length()
 
-            if next_gap < min_spacing and next_gap <= current_gap + 0.02:
+            # Only apply following distance to vehicles travelling
+            # along the same lane. Perpendicular roads should not
+            # permanently block one another.
+            var lane_dir: Vector3 = directions[i]
+            var other_dir: Vector3 = directions[j]
+            if other_dir.length_squared() < 0.01:
+                other_dir = Vector3(
+                    -sin(other.rotation.y), 0.0, -cos(other.rotation.y)
+                )
+
+            var same_lane := absf(lane_dir.dot(other_dir)) > 0.82
+            var lateral := absf(
+                offset.x * lane_dir.z - offset.y * lane_dir.x
+            )
+            var longitudinal := absf(
+                offset.x * lane_dir.x + offset.y * lane_dir.z
+            )
+
+            var following := (
+                same_lane
+                and lateral < 1.8
+                and longitudinal < min_spacing
+            )
+            # Keep a tighter safety margin at crossing points.
+            var intersection_conflict := next_gap < 2.8
+
+            if (following or intersection_conflict) and next_gap <= current_gap + 0.02:
                 blocked = true
                 break
 
@@ -687,6 +733,18 @@ func _create_street_lights():
 
 func _update_pedestrians(delta: float):
     for i in range(citizens.size()):
+        if (
+            i >= citizen_routes.size()
+            or i >= citizen_route_indices.size()
+            or i >= citizen_speeds.size()
+            or i >= citizen_waits.size()
+        ):
+            continue
+
+        var person := citizens[i]
+        if not is_instance_valid(person):
+            continue
+
         var route: Array = citizen_routes[i]
         if route.size() < 2:
             continue
@@ -695,8 +753,9 @@ func _update_pedestrians(delta: float):
             citizen_waits[i] = maxf(0.0, citizen_waits[i] - delta)
             continue
 
-        var person := citizens[i]
-        var target: Vector3 = route[citizen_route_indices[i]]
+        var target: Vector3 = route[
+            posmod(citizen_route_indices[i], route.size())
+        ]
         var current := person.position
         var difference := target - current
         difference.y = 0.0
@@ -1519,10 +1578,10 @@ func _create_sidewalks_and_parking() -> void:
         Vector3(parking_x, 0.075, parking_z + 3.2 * 3 + 1.4), white)
 
     # Benches placed on sidewalks, away from junctions.
-    _create_street_bench(Vector3(5.0, 0.27, 72.0))
-    _create_street_bench(Vector3(-5.0, 0.27, -72.0))
-    _create_street_bench(Vector3(53.0, 0.27, 96.0))
-    _create_street_bench(Vector3(-53.0, 0.27, -96.0))
+    _create_street_bench(Vector3(5.0, 0.27, 77.0))
+    _create_street_bench(Vector3(-5.0, 0.27, -77.0))
+    _create_street_bench(Vector3(53.0, 0.27, 101.0))
+    _create_street_bench(Vector3(-53.0, 0.27, -101.0))
 
     # Public rubbish bins along pedestrian routes.
     _create_rubbish_bin(Vector3(5.0, 0.27, 36.0))
