@@ -262,15 +262,30 @@ func _process(delta):
             _notice("Location discovered! Mission completed.")
 
     chatter_time -= delta
-    if chatter_time <= 0.0 and speech_bubbles.size() >= 2:
-        chatter_time = 9.0
-        var first = randi() % speech_bubbles.size()
-        var second = (first + 1 + randi() % (speech_bubbles.size() - 1)) % speech_bubbles.size()
-        speech_bubbles[first].text = NPC_CHAT[randi() % NPC_CHAT.size()]
-        speech_bubbles[second].text = NPC_CHAT[randi() % NPC_CHAT.size()]
-        speech_bubbles[first].visible = true
-        speech_bubbles[second].visible = true
-        bubble_time = 3.5
+    if chatter_time <= 0.0 and speech_bubbles.size() > 0:
+        chatter_time = randf_range(18.0, 28.0)
+
+        var nearest_index := -1
+        var nearest_distance := 22.0
+        var citizens = world.get("citizens")
+
+        if citizens != null:
+            for i in range(mini(speech_bubbles.size(), citizens.size())):
+                var citizen = citizens[i]
+                if not is_instance_valid(citizen):
+                    continue
+
+                var distance := player.global_position.distance_to(citizen.global_position)
+                if distance < nearest_distance:
+                    nearest_distance = distance
+                    nearest_index = i
+
+        if nearest_index >= 0:
+            var line: String = NPC_CHAT[randi() % NPC_CHAT.size()]
+            speech_bubbles[nearest_index].text = line
+            speech_bubbles[nearest_index].visible = true
+            bubble_time = 4.5
+            _speak(line)
 
     if bubble_time > 0.0:
         bubble_time -= delta
@@ -280,7 +295,27 @@ func _process(delta):
 
 
 func _add_speech_bubbles():
-    pass
+    if world == null:
+        return
+
+    var citizens = world.get("citizens")
+    if citizens == null:
+        return
+
+    for citizen in citizens:
+        if not is_instance_valid(citizen):
+            continue
+
+        var bubble := Label3D.new()
+        bubble.name = "CitizenSpeech"
+        bubble.font_size = 28
+        bubble.position = Vector3(0.0, 2.8, 0.0)
+        bubble.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+        bubble.modulate = Color(1.0, 0.92, 0.58)
+        bubble.outline_size = 6
+        bubble.visible = false
+        citizen.add_child(bubble)
+        speech_bubbles.append(bubble)
 
 func _to_main_menu():
     get_tree().paused = false

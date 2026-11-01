@@ -65,6 +65,11 @@ static func tint(n: Node, color: Color) -> void:
 
 static func car(index: int) -> Variant:
     var model_name: String = CARS[posmod(index, CARS.size())]
+    return car_named(model_name)
+
+static func car_named(model_name: String) -> Variant:
+    if not CARS.has(model_name):
+        return null
     var ps := _scene("res://assets/kenney/cars/%s.glb" % model_name)
     if ps == null:
         return null
