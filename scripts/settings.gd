@@ -37,11 +37,26 @@ func load_settings() -> void:
 	var c := ConfigFile.new()
 	if c.load(PATH) != OK:
 		return
-	master_volume = c.get_value("main", "master_volume", master_volume)
-	quality = c.get_value("main", "quality", quality)
-	language = c.get_value("main", "language", language)
-	look_sensitivity = c.get_value("main", "look_sensitivity", look_sensitivity)
-	day_length = c.get_value("main", "day_length", day_length)
+
+	var saved_volume = c.get_value("main", "master_volume", master_volume)
+	if typeof(saved_volume) == TYPE_INT or typeof(saved_volume) == TYPE_FLOAT:
+		master_volume = clampf(float(saved_volume), 0.0, 1.0)
+
+	var saved_quality = c.get_value("main", "quality", quality)
+	if typeof(saved_quality) == TYPE_INT:
+		quality = clampi(saved_quality, 0, 2)
+
+	var saved_language = c.get_value("main", "language", language)
+	if saved_language is String and saved_language in LANGS:
+		language = saved_language
+
+	var saved_sensitivity = c.get_value("main", "look_sensitivity", look_sensitivity)
+	if typeof(saved_sensitivity) == TYPE_INT or typeof(saved_sensitivity) == TYPE_FLOAT:
+		look_sensitivity = clampf(float(saved_sensitivity), 0.3, 2.5)
+
+	var saved_day_length = c.get_value("main", "day_length", day_length)
+	if typeof(saved_day_length) == TYPE_INT or typeof(saved_day_length) == TYPE_FLOAT:
+		day_length = clampf(float(saved_day_length), 60.0, 600.0)
 
 func save_settings() -> void:
 	var c := ConfigFile.new()

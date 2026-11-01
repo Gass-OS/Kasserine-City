@@ -110,12 +110,23 @@ func _thunder() -> void:
     Sfx.play(self, "thunder", -4.0)
 
 func _process(delta: float) -> void:
-    if dn == null or player == null or rain_fx == null:
+    if world == null or not is_instance_valid(world):
         return
+    if dn == null or not is_instance_valid(dn):
+        return
+    if player == null or not is_instance_valid(player):
+        return
+    if rain_fx == null or not is_instance_valid(rain_fx):
+        return
+
     var env = dn.get("env")
     var sun = dn.get("sun")
     var sky_mat = dn.get("sky_mat")
-    if env == null or sun == null or sky_mat == null:
+    if env == null or not is_instance_valid(env):
+        return
+    if sun == null or not is_instance_valid(sun):
+        return
+    if sky_mat == null or not is_instance_valid(sky_mat):
         return
     timer -= delta
     if timer <= 0.0:
