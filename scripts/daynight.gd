@@ -59,9 +59,19 @@ func is_night() -> bool:
 	return t < 0.22 or t > 0.78
 
 func _process(delta: float) -> void:
-	if env == null:
+	if env == null or not is_instance_valid(env):
 		return
-	t = fposmod(t + delta / Settings.day_length, 1.0)
+	if sun == null or not is_instance_valid(sun):
+		return
+	if moon == null or not is_instance_valid(moon):
+		return
+	if sky_mat == null or not is_instance_valid(sky_mat):
+		return
+	if clock == null or not is_instance_valid(clock):
+		return
+
+	var cycle_length := clampf(Settings.day_length, 60.0, 600.0)
+	t = fposmod(t + delta / cycle_length, 1.0)
 	var d := sin((t - 0.25) * TAU)
 	var day := clampf(d * 2.5 + 0.35, 0.0, 1.0)
 	var warm := pow(clampf(1.0 - absf(d), 0.0, 1.0), 4.0)
