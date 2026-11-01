@@ -111,6 +111,8 @@ static func building(cx: float, cz: float, w: float, d: float, h: float, seed_va
     holder.name = "KenneyBuilding"
     holder.position = Vector3(cx, 0.0, cz)
     holder.rotation.y = float(rng.randi() % 4) * PI * 0.5
+    holder.set_meta("building_local_dimensions", a.size * fit)
+    holder.set_meta("building_yaw", holder.rotation.y)
     var b := Basis.from_scale(Vector3.ONE * fit)
     var c := a.position + a.size * 0.5
     inst.transform = Transform3D(b, -(b * Vector3(c.x, a.position.y, c.z)))

@@ -300,7 +300,15 @@ func _create_nature_and_vehicles():
         Vector3(-120, 0, 174), Vector3(-174, 0, 120)
     ]
     for i in range(tree_positions.size()):
-        _create_tree(tree_positions[i], 0.8 + float(i % 4) * 0.12)
+        var tree_pos: Vector3 = tree_positions[i]
+        # Move trees clear of road lanes and intersections.
+        var road_x := roundf(tree_pos.x / 24.0) * 24.0
+        var road_z := roundf(tree_pos.z / 24.0) * 24.0
+        if absf(tree_pos.x - road_x) < 3.0:
+            tree_pos.x += 8.0 if tree_pos.x >= 0.0 else -8.0
+        if absf(tree_pos.z - road_z) < 3.0:
+            tree_pos.z += 8.0 if tree_pos.z >= 0.0 else -8.0
+        _create_tree(tree_pos, 0.8 + float(i % 4) * 0.12)
 
     _create_animal(Vector3(-12, 0, 9), Color(0.55, 0.32, 0.16), "DOG")
     _create_animal(Vector3(12, 0, -10), Color(0.72, 0.65, 0.48), "CAT")
@@ -1086,36 +1094,56 @@ func _create_car(pos: Vector3, paint: Color, angle: float) -> Node3D:
     car.add_child(spot)
     return car
 
-func _add_kenney_windows(cx: float, cz: float, w: float, d: float, h: float, seed_value: int) -> void:
+func _add_kenney_windows(holder: Node3D, seed_value: int) -> void:
+    if holder == null or not is_instance_valid(holder):
+        return
+
+    var dims: Vector3 = holder.get_meta("building_local_dimensions", Vector3.ZERO)
+    var building_yaw: float = float(holder.get_meta("building_yaw", 0.0))
+    if dims.x <= 0.1 or dims.y <= 0.1 or dims.z <= 0.1:
+        return
+
     var rng := RandomNumberGenerator.new()
     rng.seed = seed_value
-    var floors := maxi(1, int((h - 2.0) / 3.2))
+    var floors := maxi(1, int((dims.y - 2.0) / 3.2))
+    var center := holder.position
+    var building_basis := Basis(Vector3.UP, building_yaw)
+
     var faces: Array = [
-        [Vector3(0, 0, d * 0.5 + 0.07), 0.0, w],
-        [Vector3(0, 0, -d * 0.5 - 0.07), PI, w],
-        [Vector3(w * 0.5 + 0.07, 0, 0), PI * 0.5, d],
-        [Vector3(-w * 0.5 - 0.07, 0, 0), -PI * 0.5, d],
+        [Vector3(0, 0, dims.z * 0.5 + 0.07), 0.0, dims.x],
+        [Vector3(0, 0, -dims.z * 0.5 - 0.07), PI, dims.x],
+        [Vector3(dims.x * 0.5 + 0.07, 0, 0), PI * 0.5, dims.z],
+        [Vector3(-dims.x * 0.5 - 0.07, 0, 0), -PI * 0.5, dims.z],
     ]
+
     var lit_xforms: Array = []
     var dark_xforms: Array = []
+
     for face in faces:
         var origin: Vector3 = face[0]
-        var yaw: float = face[1]
+        var face_yaw: float = face[1]
         var span: float = face[2]
         var cols := maxi(1, int(span / 2.6))
         var spacing := span / float(cols)
-        var basis := Basis(Vector3.UP, yaw)
+        var face_basis := Basis(Vector3.UP, face_yaw)
+        var world_basis := building_basis * face_basis
+
         for col in range(cols):
             var along := -span * 0.5 + (float(col) + 0.5) * spacing
             for floor_index in range(floors):
                 var y := 1.9 + float(floor_index) * 3.2
-                if y + 1.0 >= h - 0.25:
+                if y + 1.0 >= dims.y - 0.25:
                     continue
-                var xf := Transform3D(basis, Vector3(cx, 0.0, cz) + origin + basis * Vector3(along, y, 0.0))
+
+                var local_pos := origin + face_basis * Vector3(along, y, 0.0)
+                var world_pos := center + building_basis * local_pos
+                var xf := Transform3D(world_basis, world_pos)
+
                 if rng.randf() < 0.48:
                     lit_xforms.append(xf)
                 else:
                     dark_xforms.append(xf)
+
     _window_multimesh(dark_xforms, _glass_mat())
     _window_multimesh(lit_xforms, _glow_mat(Color(1.0, 0.82, 0.5), 2.2))
 
@@ -1126,7 +1154,7 @@ func _tn_building(cx: float, cz: float, w: float, d: float, h: float, style: int
         var holder = KenneyKit.building(cx, cz, w, d, h, seed_value, tints[posmod(style, tints.size())])
         if holder != null:
             add_child(holder)
-            _add_kenney_windows(cx, cz, w, d, h, seed_value)
+            _add_kenney_windows(holder, seed_value)
             return
     _tn_building_proc(cx, cz, w, d, h, style, with_sign)
 
@@ -1284,7 +1312,8 @@ func _create_sidewalks_and_parking() -> void:
 
     # Bus shelter beside the existing bus station.
     _create_bus_stop(Vector3(53.0, 0.27, 12.0))
-    _create_public_plaza(Vector3(60.0, 0.0, 24.0))
+    # Plaza moved into the open central block, away from traffic lanes.
+    _create_public_plaza(Vector3(36.0, 0.0, 36.0))
 
 
 # Stage 14: low-poly public street bench.
