@@ -146,7 +146,6 @@ func _run_intro() -> void:
     if finished:
         return
     boot_box.hide()
-    _narrate()
 
     for i in range(CARDS.size()):
         if finished:
@@ -171,7 +170,38 @@ func _show_card(kicker: String, title_text: String, body_text: String, hold: flo
     await incoming.finished
     if finished:
         return
-    await get_tree().create_timer(hold).timeout
+    await _speak_card(body_text, hold)
+
+func _speak_card(body_text: String, minimum_hold: float) -> void:
+    var voices := DisplayServer.tts_get_voices()
+    var chosen_id := ""
+
+    for voice in voices:
+        if str(voice.get("language", "")).to_lower().begins_with("en"):
+            chosen_id = str(voice.get("id", ""))
+            break
+
+    if chosen_id.is_empty() and not voices.is_empty():
+        chosen_id = str(voices[0].get("id", ""))
+
+    if chosen_id.is_empty():
+        await get_tree().create_timer(minimum_hold).timeout
+        return
+
+    DisplayServer.tts_speak(
+        body_text, chosen_id, 80, 1.0, 0.92, 72, true
+    )
+
+    var elapsed := 0.0
+    while DisplayServer.tts_is_speaking() and elapsed < 14.0:
+        await get_tree().create_timer(0.1).timeout
+        elapsed += 0.1
+
+    if DisplayServer.tts_is_speaking():
+        DisplayServer.tts_stop()
+
+    if elapsed < minimum_hold:
+        await get_tree().create_timer(minimum_hold - elapsed).timeout
 
 func _narrate() -> void:
     # Android device text-to-speech is optional; story text stays visible without it.

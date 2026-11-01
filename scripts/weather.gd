@@ -36,7 +36,7 @@ func _ready() -> void:
     if dn == null or player == null:
         return
     rain_fx = CPUParticles3D.new()
-    rain_fx.amount = 800
+    rain_fx.amount = 360
     rain_fx.lifetime = 0.9
     rain_fx.local_coords = false
     rain_fx.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
