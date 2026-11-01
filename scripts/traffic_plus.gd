@@ -148,32 +148,16 @@ func _spawn_fleet() -> void:
         count += 1
 
 func _tidy_parked() -> void:
-    var tc = world.get("traffic_cars")
-    var kept: Array = []
-    for ch in world.get_children():
-        if not (ch is Node3D) or not String(ch.name).begins_with("ParkedCar"):
+    # Remove misplaced parked vehicles. Keep the five original
+    # moving traffic cars created and controlled by world.gd.
+    if world == null:
+        return
+    for child in world.get_children():
+        if not (child is Node3D):
             continue
-        if tc != null and tc.has(ch):
-            continue
-        var c := ch as Node3D
-        var ns := absf(cos(c.rotation.y)) > 0.7
-        var lat_axis := c.position.x if ns else c.position.z
-        var line := roundf(lat_axis / PITCH)
-        var off := lat_axis - line * PITCH
-        if absf(c.position.x) > 100.0 or absf(c.position.z) > 100.0 or absf(off) > 4.5:
-            continue
-        var want := 1.0 if posmod(int(line), 2) == 0 else -1.0
-        if off * want <= 0.0:
-            c.queue_free()
-            continue
-        var lat := line * PITCH + want * 2.3
-        if ns:
-            c.position.x = lat
-        else:
-            c.position.z = lat
-        c.position.y = 0.06
-        kept.append(c)
-    _bays(kept)
+        var vehicle_name := String(child.name)
+        if vehicle_name.begins_with("ParkedCar") or vehicle_name.begins_with("ParkedMotorcycle"):
+            child.queue_free()
 
 func _bays(kept: Array) -> void:
     var xf: Array = []
