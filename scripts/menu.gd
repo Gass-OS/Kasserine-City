@@ -1,4 +1,5 @@
 extends Control
+const LoadScreen = preload("res://scripts/loader.gd")
 
 var ui: Control
 var rng := RandomNumberGenerator.new()
@@ -110,7 +111,7 @@ func _show_main() -> void:
 	create_tween().tween_property(v, "modulate:a", 1.0, 0.8)
 
 func _on_play() -> void:
-	get_tree().change_scene_to_file("res://main.tscn")
+	LoadScreen.run(self)
 
 func _show_story() -> void:
         _clear()

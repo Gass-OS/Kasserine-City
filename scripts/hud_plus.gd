@@ -17,6 +17,8 @@ class Mini extends Control:
     func _target() -> Variant:
         if world != null and world.has_meta("radar_target"):
             return world.get_meta("radar_target")
+        if world != null and world.has_meta("dispute_pos"):
+            return world.get_meta("dispute_pos")
         if gp == null:
             return null
         var m := int(gp.mission)

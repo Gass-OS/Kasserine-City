@@ -1,4 +1,4 @@
-[gd_scene load_steps=16 format=3]
+[gd_scene load_steps=19 format=3]
 
 [ext_resource type="Script" path="res://scripts/world.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/daynight.gd" id="2"]
@@ -15,7 +15,9 @@
 [ext_resource type="Script" path="res://scripts/drive.gd" id="13"]
 [ext_resource type="Script" path="res://scripts/incidents.gd" id="14"]
 [ext_resource type="Script" path="res://scripts/weather.gd" id="15"]
-[ext_resource type="Script" path="res://scripts/police_services.gd" id="16"]
+[ext_resource type="Script" path="res://scripts/physics_plus.gd" id="16"]
+[ext_resource type="Script" path="res://scripts/disputes.gd" id="17"]
+[ext_resource type="Script" path="res://scripts/intro.gd" id="18"]
 
 [node name="KasserineCity" type="Node3D"]
 script = ExtResource("1")
@@ -62,5 +64,11 @@ script = ExtResource("14")
 [node name="Weather" type="Node" parent="."]
 script = ExtResource("15")
 
-[node name="PoliceServices" type="Node" parent="."]
+[node name="PhysicsPlus" type="Node" parent="."]
 script = ExtResource("16")
+
+[node name="Disputes" type="Node" parent="."]
+script = ExtResource("17")
+
+[node name="Intro" type="Node" parent="."]
+script = ExtResource("18")
