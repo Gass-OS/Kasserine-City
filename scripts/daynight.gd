@@ -78,7 +78,7 @@ func _process(delta: float) -> void:
 	sun.rotation_degrees = Vector3(-(t - 0.25) * 360.0, -35.0, 0.0)
 	sun.light_energy = day * 0.95
 	sun.light_color = Color(1, 1, 1).lerp(Color(1.0, 0.6, 0.35), warm)
-	sun.visible = day > 0.01
+	sun.visible = true
 	moon.rotation_degrees = Vector3(-(t - 0.25) * 360.0 + 180.0, -35.0, 0.0)
 	moon.light_energy = (1.0 - day) * 0.3
 	var top := Color(0.02, 0.03, 0.09).lerp(Color(0.22, 0.46, 0.88), day)

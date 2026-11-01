@@ -103,7 +103,7 @@ func _next_state() -> void:
         s = "rain"
     state = s
     timer = randf_range(100.0, 190.0)
-    rain_fx.amount = 450 if state == "rain" else 900
+    pass
     _announce(s)
 
 func _thunder() -> void:

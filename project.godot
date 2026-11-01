@@ -1,6 +1,8 @@
 config_version=5
 
 [application]
+boot_splash/show_image=false
+boot_splash/bg_color=Color(0, 0, 0, 1)
 config/name="Kasserine City"
 config/description="A native 3D open-world game inspired by Kasserine, Tunisia."
 run/main_scene="res://menu.tscn"
@@ -21,3 +23,4 @@ environment/defaults/default_clear_color=Color(0.45, 0.68, 0.88, 1)
 [autoload]
 
 Settings="*res://scripts/settings.gd"
+Watchdog="*res://scripts/watchdog.gd"
