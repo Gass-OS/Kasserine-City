@@ -710,7 +710,17 @@ func _create_street_lamp(pos: Vector3):
     pool.rotation_degrees.x = -90
     pool.position = Vector3(0.85, 0.22, 0)
     pool.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-    # Keep the additive ground-light quad alive for rendering.
+    lamp.add_child(pool)
+
+    var light := OmniLight3D.new()
+    light.name = "StreetLampLight"
+    light.position = Vector3(0.85, 4.05, 0)
+    light.light_color = Color(1.0, 0.78, 0.48)
+    light.light_energy = 0.0
+    light.omni_range = 14.0
+    light.shadow_enabled = false
+    light.add_to_group("street_lamp_light")
+    lamp.add_child(light)
 
 func _car_mesh(car: Node3D, mesh: Mesh, pos: Vector3, mat: Material, rot_y := 0.0) -> MeshInstance3D:
     var mi := MeshInstance3D.new()
@@ -1076,12 +1086,47 @@ func _create_car(pos: Vector3, paint: Color, angle: float) -> Node3D:
     car.add_child(spot)
     return car
 
+func _add_kenney_windows(cx: float, cz: float, w: float, d: float, h: float, seed_value: int) -> void:
+    var rng := RandomNumberGenerator.new()
+    rng.seed = seed_value
+    var floors := maxi(1, int((h - 2.0) / 3.2))
+    var faces: Array = [
+        [Vector3(0, 0, d * 0.5 + 0.07), 0.0, w],
+        [Vector3(0, 0, -d * 0.5 - 0.07), PI, w],
+        [Vector3(w * 0.5 + 0.07, 0, 0), PI * 0.5, d],
+        [Vector3(-w * 0.5 - 0.07, 0, 0), -PI * 0.5, d],
+    ]
+    var lit_xforms: Array = []
+    var dark_xforms: Array = []
+    for face in faces:
+        var origin: Vector3 = face[0]
+        var yaw: float = face[1]
+        var span: float = face[2]
+        var cols := maxi(1, int(span / 2.6))
+        var spacing := span / float(cols)
+        var basis := Basis(Vector3.UP, yaw)
+        for col in range(cols):
+            var along := -span * 0.5 + (float(col) + 0.5) * spacing
+            for floor_index in range(floors):
+                var y := 1.9 + float(floor_index) * 3.2
+                if y + 1.0 >= h - 0.25:
+                    continue
+                var xf := Transform3D(basis, Vector3(cx, 0.0, cz) + origin + basis * Vector3(along, y, 0.0))
+                if rng.randf() < 0.48:
+                    lit_xforms.append(xf)
+                else:
+                    dark_xforms.append(xf)
+    _window_multimesh(dark_xforms, _glass_mat())
+    _window_multimesh(lit_xforms, _glow_mat(Color(1.0, 0.82, 0.5), 2.2))
+
 func _tn_building(cx: float, cz: float, w: float, d: float, h: float, style: int, with_sign := true) -> void:
     if with_sign and posmod(int(absf(cx) * 0.13 + absf(cz) * 0.29) + style, 3) != 0:
         var tints: Array = [Color(0.9, 0.82, 0.68), Color(0.86, 0.76, 0.6), Color(0.82, 0.8, 0.72), Color(0.92, 0.72, 0.52), Color(0.72, 0.8, 0.86)]
-        var holder = KenneyKit.building(cx, cz, w, d, h, style * 977 + int(absf(cx) * 31.0 + absf(cz) * 17.0), tints[posmod(style, tints.size())])
+        var seed_value := style * 977 + int(absf(cx) * 31.0 + absf(cz) * 17.0)
+        var holder = KenneyKit.building(cx, cz, w, d, h, seed_value, tints[posmod(style, tints.size())])
         if holder != null:
             add_child(holder)
+            _add_kenney_windows(cx, cz, w, d, h, seed_value)
             return
     _tn_building_proc(cx, cz, w, d, h, style, with_sign)
 
