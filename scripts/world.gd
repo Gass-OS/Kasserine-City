@@ -469,24 +469,64 @@ func _create_traffic_car(start: Vector3, paint: Color,
     traffic_targets.append(1)
     traffic_speeds.append(speed)
 
-func _update_traffic(delta: float):
+func _update_traffic(delta: float) -> void:
+    # Keep enough space between vehicles to prevent body overlap.
+    var min_spacing := 5.2
+
     for i in range(traffic_cars.size()):
         var car: Node3D = traffic_cars[i]
+        if not is_instance_valid(car):
+            continue
+
         var route: Array = traffic_paths[i]
         if route.size() < 2:
             continue
 
-        var target: Vector3 = route[traffic_targets[i]]
+        var target_index := posmod(traffic_targets[i], route.size())
+        var target: Vector3 = route[target_index]
         var difference := target - car.position
         difference.y = 0.0
         var distance := difference.length()
 
         if distance < 0.65:
-            traffic_targets[i] = (traffic_targets[i] + 1) % route.size()
+            traffic_targets[i] = (target_index + 1) % route.size()
             continue
 
         var direction := difference.normalized()
-        car.position += direction * minf(traffic_speeds[i] * delta, distance)
+        var step := minf(traffic_speeds[i] * delta, distance)
+        var next_position := car.position + direction * step
+        var blocked := false
+
+        # Check every other traffic vehicle before moving.
+        for j in range(traffic_cars.size()):
+            if i == j:
+                continue
+
+            var other: Node3D = traffic_cars[j]
+            if not is_instance_valid(other):
+                continue
+
+            var current_gap := Vector2(
+                car.position.x - other.position.x,
+                car.position.z - other.position.z
+            ).length()
+
+            var next_gap := Vector2(
+                next_position.x - other.position.x,
+                next_position.z - other.position.z
+            ).length()
+
+            if next_gap < min_spacing:
+                # Allow a car to escape an existing close position,
+                # but block movement that maintains or reduces the gap.
+                if next_gap <= current_gap + 0.02:
+                    blocked = true
+                    break
+
+        if blocked:
+            continue
+
+        car.position = next_position
         car.rotation.y = atan2(-direction.x, -direction.z)
 
 func _create_landmark_building(title: String, pos: Vector3,
