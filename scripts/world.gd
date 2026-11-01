@@ -2,6 +2,7 @@ extends Node3D
 
 const PlayerScript = preload("res://scripts/player.gd")
 const CharacterModel = preload("res://scripts/character_model.gd")
+const Sfx = preload("res://scripts/sfx.gd")
 
 func _ready():
     _create_environment()
@@ -469,13 +470,42 @@ func _create_traffic_car(start: Vector3, paint: Color,
     traffic_targets.append(1)
     traffic_speeds.append(speed)
 
+    # A lightweight spatial engine loop follows this moving vehicle.
+    var engine := AudioStreamPlayer3D.new()
+    engine.name = "TrafficEngineAudio"
+    engine.stream = Sfx.get_sound("engine")
+    engine.volume_db = -21.0
+    engine.pitch_scale = clampf(0.82 + speed * 0.035, 0.85, 1.15)
+    engine.max_distance = 34.0
+    engine.unit_size = 8.0
+    engine.position = Vector3(0.0, 0.7, 0.0)
+    car.add_child(engine)
+    engine.play()
+
 func _update_traffic(delta: float) -> void:
-    # Keep enough space between vehicles to prevent body overlap.
-    var min_spacing := 5.2
+    # Plan all vehicle movements before applying any of them.
+    # This prevents cars from independently moving into the same space.
+    var min_spacing := 6.8
+    var original_positions: Array = []
+    var proposed_positions: Array = []
+    var accepted_positions: Array = []
+    var directions: Array = []
+    var can_move: Array = []
 
     for i in range(traffic_cars.size()):
         var car: Node3D = traffic_cars[i]
+        var current := car.position if is_instance_valid(car) else Vector3.ZERO
+
+        original_positions.append(current)
+        proposed_positions.append(current)
+        accepted_positions.append(current)
+        directions.append(Vector3.ZERO)
+        can_move.append(false)
+
         if not is_instance_valid(car):
+            continue
+
+        if i >= traffic_paths.size() or i >= traffic_targets.size() or i >= traffic_speeds.size():
             continue
 
         var route: Array = traffic_paths[i]
@@ -484,7 +514,7 @@ func _update_traffic(delta: float) -> void:
 
         var target_index := posmod(traffic_targets[i], route.size())
         var target: Vector3 = route[target_index]
-        var difference := target - car.position
+        var difference := target - current
         difference.y = 0.0
         var distance := difference.length()
 
@@ -494,10 +524,20 @@ func _update_traffic(delta: float) -> void:
 
         var direction := difference.normalized()
         var step := minf(traffic_speeds[i] * delta, distance)
-        var next_position := car.position + direction * step
+        proposed_positions[i] = current + direction * step
+        directions[i] = direction
+        can_move[i] = true
+
+    # Approve movements in a stable order. Earlier approved cars use
+    # their planned positions; later cars are checked at their current
+    # positions and will be checked again when their turn arrives.
+    for i in range(traffic_cars.size()):
+        if not can_move[i]:
+            continue
+
+        var candidate: Vector3 = proposed_positions[i]
         var blocked := false
 
-        # Check every other traffic vehicle before moving.
         for j in range(traffic_cars.size()):
             if i == j:
                 continue
@@ -506,28 +546,38 @@ func _update_traffic(delta: float) -> void:
             if not is_instance_valid(other):
                 continue
 
+            var comparison_position: Vector3 = (
+                accepted_positions[j] if j < i else original_positions[j]
+            )
+
             var current_gap := Vector2(
-                car.position.x - other.position.x,
-                car.position.z - other.position.z
+                original_positions[i].x - original_positions[j].x,
+                original_positions[i].z - original_positions[j].z
             ).length()
 
             var next_gap := Vector2(
-                next_position.x - other.position.x,
-                next_position.z - other.position.z
+                candidate.x - comparison_position.x,
+                candidate.z - comparison_position.z
             ).length()
 
-            if next_gap < min_spacing:
-                # Allow a car to escape an existing close position,
-                # but block movement that maintains or reduces the gap.
-                if next_gap <= current_gap + 0.02:
-                    blocked = true
-                    break
+            if next_gap < min_spacing and next_gap <= current_gap + 0.02:
+                blocked = true
+                break
 
-        if blocked:
+        if not blocked:
+            accepted_positions[i] = candidate
+
+    # Apply the approved positions together, after all decisions are made.
+    for i in range(traffic_cars.size()):
+        var car: Node3D = traffic_cars[i]
+        if not is_instance_valid(car):
             continue
 
-        car.position = next_position
-        car.rotation.y = atan2(-direction.x, -direction.z)
+        car.position = accepted_positions[i]
+
+        if can_move[i] and accepted_positions[i] != original_positions[i]:
+            var direction: Vector3 = directions[i]
+            car.rotation.y = atan2(-direction.x, -direction.z)
 
 func _create_landmark_building(title: String, pos: Vector3,
         size: Vector3, color: Color):

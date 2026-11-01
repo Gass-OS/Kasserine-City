@@ -1,6 +1,7 @@
 extends Node
 
 const Sfx = preload("res://scripts/sfx.gd")
+const KenneyKit = preload("res://scripts/kenney.gd")
 
 var world: Node3D
 var player: Node3D
@@ -13,6 +14,9 @@ var blink := 0.0
 var arrived := false
 var nodes: Array = []
 var lights: Array = []
+var last_incident_pos: Vector3 = Vector3.ZERO
+var medic_lights: Array = []
+var medic_blink := 0.0
 
 func _ready() -> void:
     for i in range(5):
@@ -83,6 +87,7 @@ func _spawn() -> void:
     p.global_position = pos + Vector3(-1.0, 1.0, -0.8)
     nodes.append(p)
     active_pos = pos
+    last_incident_pos = pos
     state = "active"
     active_t = 0.0
     secure_t = 0.0
@@ -121,12 +126,85 @@ func _resolve(success: bool) -> void:
     active_pos = null
     timer = randf_range(180.0, 260.0)
 
+func _spawn_ambulance(pos: Vector3) -> void:
+    var spawned = KenneyKit.car_named("ambulance")
+    if spawned == null:
+        _say("Dispatch", "Ambulance model unavailable. Medical response remains pending.")
+        return
+
+    var ambulance := Node3D.new()
+    ambulance.name = "EmergencyAmbulance"
+    ambulance.position = pos + Vector3(0.0, 0.0, -10.0)
+    world.add_child(ambulance)
+    ambulance.add_child(spawned["node"])
+
+    var dimensions: Vector3 = spawned["size"]
+    var roof_y := maxf(dimensions.y, 1.4) + 0.18
+
+    # Visible red and blue roof beacons.
+    for i in range(2):
+        var red_side := i == 0
+        var beacon := MeshInstance3D.new()
+        var mesh := BoxMesh.new()
+        mesh.size = Vector3(0.34, 0.16, 0.24)
+        beacon.mesh = mesh
+
+        var material := StandardMaterial3D.new()
+        var beacon_color := Color(1.0, 0.035, 0.025) if red_side else Color(0.025, 0.18, 1.0)
+        material.albedo_color = beacon_color
+        material.emission_enabled = true
+        material.emission = beacon_color
+        material.emission_energy_multiplier = 2.5
+        material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+        beacon.material_override = material
+        beacon.position = Vector3(-0.38 if red_side else 0.38, roof_y, 0.0)
+        ambulance.add_child(beacon)
+
+        var lamp := OmniLight3D.new()
+        lamp.light_color = beacon_color
+        lamp.omni_range = 13.0
+        lamp.light_energy = 0.0
+        lamp.shadow_enabled = false
+        lamp.position = beacon.position + Vector3(0.0, 0.25, 0.0)
+        ambulance.add_child(lamp)
+        medic_lights.append(lamp)
+
+    # The siren is spatial and follows the ambulance.
+    var siren := AudioStreamPlayer3D.new()
+    siren.name = "AmbulanceSiren"
+    siren.stream = Sfx.get_sound("siren")
+    siren.volume_db = -9.0
+    siren.max_distance = 65.0
+    siren.unit_size = 10.0
+    ambulance.add_child(siren)
+    siren.play()
+
+    medic_blink = 0.0
+    get_tree().create_timer(24.0).timeout.connect(
+        _remove_ambulance.bind(ambulance)
+    )
+
+func _remove_ambulance(ambulance: Node3D) -> void:
+    if is_instance_valid(ambulance):
+        ambulance.queue_free()
+    medic_lights.clear()
+    medic_blink = 0.0
+
 func _medics() -> void:
-    _say("Dispatch", "Copy. Medics are en route. Good work, Unit 7.")
+    _say("Dispatch", "Copy. Ambulance 12 dispatched to the collision. Good work, Unit 7.")
+    _spawn_ambulance(last_incident_pos)
+    _say("Medic 12", "Medical team on scene. Beginning patient assessment. Over.")
 
 func _process(delta: float) -> void:
     if world == null or player == null:
         return
+
+    medic_blink += delta
+    for i in range(medic_lights.size()):
+        var medic_light: OmniLight3D = medic_lights[i]
+        if is_instance_valid(medic_light):
+            medic_light.light_energy = 3.5 if (int(medic_blink * 4.0) + i) % 2 == 0 else 0.0
+
     if state == "idle":
         timer -= delta
         if timer <= 0.0:
