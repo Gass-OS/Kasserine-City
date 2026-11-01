@@ -154,6 +154,9 @@ func _shop(cx: float, cz: float, w: float, d: float, h: float, yaw: float, def: 
         _bx(holder, Vector3(0.16, 0.56, 0.08), Vector3(w * 0.36, 3.1, fz + 0.16), gg)
     if kind == "cafe":
         var wood := _m("wood", Color(0.35, 0.22, 0.12))
+        # Keep outdoor seating close to the shop frontage so chairs
+        # remain inside the sidewalk clearance instead of the road.
+        var cafe_front_offset := minf(0.75, maxf(0.45, d * 0.12))
         for tx in [-w * 0.22, w * 0.22]:
             var cm := CylinderMesh.new()
             cm.top_radius = 0.38
@@ -163,13 +166,13 @@ func _shop(cx: float, cz: float, w: float, d: float, h: float, yaw: float, def: 
             var top := MeshInstance3D.new()
             top.mesh = cm
             top.material_override = wood
-            top.position = Vector3(tx, 0.72, fz + 1.0)
+            top.position = Vector3(tx, 0.72, fz + cafe_front_offset)
             holder.add_child(top)
-            _bx(holder, Vector3(0.08, 0.7, 0.08), Vector3(tx, 0.36, fz + 1.0), wood)
+            _bx(holder, Vector3(0.08, 0.7, 0.08), Vector3(tx, 0.36, fz + cafe_front_offset), wood)
             for cs in [-0.65, 0.65]:
-                _bx(holder, Vector3(0.4, 0.06, 0.4), Vector3(tx + cs, 0.46, fz + 1.0), wood)
-                _bx(holder, Vector3(0.4, 0.45, 0.05), Vector3(tx + cs, 0.7, fz + 1.0 + signf(cs) * 0.2), wood)
-        _parasol(holder, Vector3(0.0, 0.0, fz + 1.0), w)
+                _bx(holder, Vector3(0.4, 0.06, 0.4), Vector3(tx + cs, 0.46, fz + cafe_front_offset), wood)
+                _bx(holder, Vector3(0.4, 0.45, 0.05), Vector3(tx + cs, 0.7, fz + cafe_front_offset + signf(cs) * 0.2), wood)
+        _parasol(holder, Vector3(0.0, 0.0, fz + cafe_front_offset), w)
 
 func _parasol(parent: Node3D, pos: Vector3, w: float) -> void:
     var path := "res://assets/kenney/commercial/detail-parasol-a.glb"
