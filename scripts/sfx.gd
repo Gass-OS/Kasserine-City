@@ -84,7 +84,7 @@ static func _siren() -> AudioStreamWAV:
         data.encode_s16(i * 2, int(clampf(s, -1.0, 1.0) * 32767.0))
     return _pack(data, true)
 
-static func _horn() -> AudioStreamWAV:
+static func _horn_legacy() -> AudioStreamWAV:
     var n := int(0.48 * float(RATE))
     var data := PackedByteArray()
     data.resize(n * 2)
