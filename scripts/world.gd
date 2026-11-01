@@ -322,13 +322,13 @@ func _create_nature_and_vehicles():
     ]
     for i in range(tree_positions.size()):
         var tree_pos: Vector3 = tree_positions[i]
-        # Move trees clear of road lanes and intersections.
+        # Keep the full tree canopy on the sidewalk, away from road edges.
         var road_x := roundf(tree_pos.x / 24.0) * 24.0
         var road_z := roundf(tree_pos.z / 24.0) * 24.0
-        if absf(tree_pos.x - road_x) < 3.0:
-            tree_pos.x += 8.0 if tree_pos.x >= 0.0 else -8.0
-        if absf(tree_pos.z - road_z) < 3.0:
-            tree_pos.z += 8.0 if tree_pos.z >= 0.0 else -8.0
+        if absf(tree_pos.x - road_x) < 5.5:
+            tree_pos.x = road_x + (8.0 if tree_pos.x >= road_x else -8.0)
+        if absf(tree_pos.z - road_z) < 5.5:
+            tree_pos.z = road_z + (8.0 if tree_pos.z >= road_z else -8.0)
         _create_tree(tree_pos, 0.8 + float(i % 4) * 0.12)
 
     # Stage 15: agricultural plots in the four unused outer corners.
@@ -574,9 +574,8 @@ func _create_traffic_car(start: Vector3, paint: Color,
     car.add_child(horn)
 
 func _update_traffic(delta: float) -> void:
-    # Plan all vehicle movements before applying any of them.
-    # This prevents cars from independently moving into the same space.
-    var min_spacing := 5.0
+    # Clamp frame hitches so vehicles cannot jump through the city.
+    var safe_delta := clampf(delta, 0.0, 0.12)
     var original_positions: Array = []
     var proposed_positions: Array = []
     var accepted_positions: Array = []
@@ -595,7 +594,6 @@ func _update_traffic(delta: float) -> void:
 
         if not is_instance_valid(car):
             continue
-
         if i >= traffic_paths.size() or i >= traffic_targets.size() or i >= traffic_speeds.size():
             continue
 
@@ -614,78 +612,90 @@ func _update_traffic(delta: float) -> void:
             continue
 
         var direction := difference.normalized()
-        var step := minf(traffic_speeds[i] * delta, distance)
+        var step := minf(traffic_speeds[i] * safe_delta, distance)
         proposed_positions[i] = current + direction * step
         directions[i] = direction
         can_move[i] = true
 
-    # Approve movements in a stable order. Earlier approved cars use
-    # their planned positions; later cars are checked at their current
-    # positions and will be checked again when their turn arrives.
+    # Resolve in stable order. Earlier cars have priority.
+    # Compare complete movement segments, not only frame endpoints.
     for i in range(traffic_cars.size()):
         if not can_move[i]:
             continue
 
-        var candidate: Vector3 = proposed_positions[i]
+        var start_i: Vector3 = original_positions[i]
+        var end_i: Vector3 = proposed_positions[i]
+        var move_i := Vector2(end_i.x - start_i.x, end_i.z - start_i.z)
         var blocked := false
 
         for j in range(traffic_cars.size()):
-            if i == j:
+            if i == j or not is_instance_valid(traffic_cars[j]):
                 continue
 
-            var other: Node3D = traffic_cars[j]
-            if not is_instance_valid(other):
-                continue
+            # Earlier cars use their accepted movement. Later cars
+            # are treated as stationary until their priority turn.
+            var start_j: Vector3 = original_positions[j]
+            var end_j: Vector3 = accepted_positions[j] if j < i else start_j
 
-            var comparison_position: Vector3 = (
-                accepted_positions[j] if j < i else original_positions[j]
-            )
+            var r0 := Vector2(start_i.x - start_j.x, start_i.z - start_j.z)
+            var move_j := Vector2(end_j.x - start_j.x, end_j.z - start_j.z)
+            var relative_move := move_i - move_j
+            var relative_len_sq := relative_move.length_squared()
 
-            var current_gap := Vector2(
-                original_positions[i].x - original_positions[j].x,
-                original_positions[i].z - original_positions[j].z
-            ).length()
+            # Closest separation during the same frame interval.
+            var closest_t := 0.0
+            if relative_len_sq > 0.000001:
+                closest_t = clampf(
+                    -r0.dot(relative_move) / relative_len_sq,
+                    0.0,
+                    1.0
+                )
 
-            var offset := Vector2(
-                candidate.x - comparison_position.x,
-                candidate.z - comparison_position.z
-            )
-            var next_gap := offset.length()
+            var closest_offset := r0 + relative_move * closest_t
+            var closest_gap := closest_offset.length()
 
-            # Only apply following distance to vehicles travelling
-            # along the same lane. Perpendicular roads should not
-            # permanently block one another.
-            var lane_dir: Vector3 = directions[i]
-            var other_dir: Vector3 = directions[j]
-            if other_dir.length_squared() < 0.01:
-                other_dir = Vector3(
+            var end_offset := Vector2(end_i.x - end_j.x, end_i.z - end_j.z)
+            var end_gap := end_offset.length()
+            var start_gap := r0.length()
+
+            var lane_i: Vector3 = directions[i]
+            var lane_j: Vector3 = directions[j]
+            if lane_j.length_squared() < 0.01:
+                var other: Node3D = traffic_cars[j]
+                lane_j = Vector3(
                     -sin(other.rotation.y), 0.0, -cos(other.rotation.y)
                 )
 
-            var same_lane := absf(lane_dir.dot(other_dir)) > 0.82
+            var same_lane := absf(lane_i.dot(lane_j)) > 0.82
             var lateral := absf(
-                offset.x * lane_dir.z - offset.y * lane_dir.x
-            )
-            var longitudinal := absf(
-                offset.x * lane_dir.x + offset.y * lane_dir.z
+                closest_offset.x * lane_i.z -
+                closest_offset.y * lane_i.x
             )
 
-            var following := (
-                same_lane
-                and lateral < 1.8
-                and longitudinal < min_spacing
-            )
-            # Keep a tighter safety margin at crossing points.
-            var intersection_conflict := next_gap < 2.8
+            var minimum_gap := 3.8
+            if same_lane and lateral < 2.0:
+                minimum_gap = 5.0
+            elif same_lane:
+                # Parallel adjacent lanes should not block each other.
+                continue
 
-            if (following or intersection_conflict) and next_gap <= current_gap + 0.02:
-                blocked = true
-                break
+            # Block any path that enters another car's safety radius.
+            # Exception: a car already too close may continue moving away
+            # when the closest point is the beginning of this frame.
+            if closest_gap < minimum_gap:
+                moving_away_from_existing_overlap := (
+                    start_gap < minimum_gap
+                    and closest_t <= 0.0001
+                    and end_gap > start_gap + 0.02
+                )
+                if not moving_away_from_existing_overlap:
+                    blocked = true
+                    break
 
         if not blocked:
-            accepted_positions[i] = candidate
+            accepted_positions[i] = end_i
 
-    # Apply the approved positions together, after all decisions are made.
+    # Apply all accepted positions after conflict resolution.
     for i in range(traffic_cars.size()):
         var car: Node3D = traffic_cars[i]
         if not is_instance_valid(car):
@@ -881,8 +891,8 @@ func _glow_dot(pos: Vector3, color: Color, size: float, energy: float):
     mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
     add_child(mi)
 
-func _window_multimesh(xforms: Array, mat: Material):
-    if xforms.is_empty():
+func _window_multimesh(xforms: Array, mat: Material, parent: Node3D) -> void:
+    if xforms.is_empty() or parent == null or not is_instance_valid(parent):
         return
     var mm := MultiMesh.new()
     mm.transform_format = MultiMesh.TRANSFORM_3D
@@ -896,7 +906,7 @@ func _window_multimesh(xforms: Array, mat: Material):
     inst.multimesh = mm
     inst.material_override = mat
     inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-    add_child(inst)
+    parent.add_child(inst)
 
 func _add_windows(cx: float, cz: float, w: float, d: float, h: float):
     return
@@ -931,8 +941,8 @@ func _add_windows(cx: float, cz: float, w: float, d: float, h: float):
                         lit_xf.append(xf)
                     else:
                         dark_xf.append(xf)
-        _window_multimesh(dark_xf, _glass_mat())
-        _window_multimesh(lit_xf, _glow_mat(Color(1.0, 0.82, 0.5), 2.2))
+        _window_multimesh(dark_xf, _glass_mat(), self)
+        _window_multimesh(lit_xf, _glow_mat(Color(1.0, 0.82, 0.5), 2.2), self)
         for r in range(3, floors, 3):
             _box(self, Vector3(w + 0.3, 0.22, d + 0.3), Vector3(cx, 0.8 + r * 3.2, cz), tone)
     _box(self, Vector3(w + 0.2, 0.5, d + 0.2), Vector3(cx, h + 0.25, cz), tone)
@@ -1386,8 +1396,8 @@ func _add_kenney_windows(holder: Node3D, seed_value: int) -> void:
     var rng := RandomNumberGenerator.new()
     rng.seed = seed_value
     var floors := maxi(1, int((dims.y - 2.0) / 3.2))
-    var center := holder.position
-    var building_basis := Basis(Vector3.UP, building_yaw)
+    # Window instances are children of the building holder, so keep
+    # every window transform in the holder's local coordinate space.
 
     var faces: Array = [
         [Vector3(0, 0, dims.z * 0.5 + 0.07), 0.0, dims.x],
@@ -1406,7 +1416,6 @@ func _add_kenney_windows(holder: Node3D, seed_value: int) -> void:
         var cols := maxi(1, int(span / 2.6))
         var spacing := span / float(cols)
         var face_basis := Basis(Vector3.UP, face_yaw)
-        var world_basis := building_basis * face_basis
 
         for col in range(cols):
             var along := -span * 0.5 + (float(col) + 0.5) * spacing
@@ -1416,16 +1425,15 @@ func _add_kenney_windows(holder: Node3D, seed_value: int) -> void:
                     continue
 
                 var local_pos := origin + face_basis * Vector3(along, y, 0.0)
-                var world_pos := center + building_basis * local_pos
-                var xf := Transform3D(world_basis, world_pos)
+                var xf := Transform3D(face_basis, local_pos)
 
                 if rng.randf() < 0.48:
                     lit_xforms.append(xf)
                 else:
                     dark_xforms.append(xf)
 
-    _window_multimesh(dark_xforms, _glass_mat())
-    _window_multimesh(lit_xforms, _glow_mat(Color(1.0, 0.82, 0.5), 2.2))
+    _window_multimesh(dark_xforms, _glass_mat(), holder)
+    _window_multimesh(lit_xforms, _glow_mat(Color(1.0, 0.82, 0.5), 2.2), holder)
 
 func _tn_building(cx: float, cz: float, w: float, d: float, h: float, style: int, with_sign := true) -> void:
     building_rects.append(Rect2(cx - w * 0.5, cz - d * 0.5, w, d))

@@ -119,15 +119,6 @@ func _process(delta: float) -> void:
     if rain_fx == null or not is_instance_valid(rain_fx):
         return
 
-    var env = dn.get("env")
-    var sun = dn.get("sun")
-    var sky_mat = dn.get("sky_mat")
-    if env == null or not is_instance_valid(env):
-        return
-    if sun == null or not is_instance_valid(sun):
-        return
-    if sky_mat == null or not is_instance_valid(sky_mat):
-        return
     timer -= delta
     if timer <= 0.0:
         _next_state()
@@ -154,28 +145,7 @@ func _process(delta: float) -> void:
         flash = clampf(flash_t / 0.3, 0.0, 1.0)
         if int(flash_t * 40.0) % 3 != 0:
             flash *= 0.4
-    sun.light_energy = day * 0.95 * (1.0 - 0.7 * gloom)
-    var moon = dn.get("moon")
-    if moon != null:
-        moon.light_energy = (1.0 - day) * 0.3 * (1.0 - 0.6 * gloom)
-    var gray := Color(0.52, 0.54, 0.58) * (0.22 + 0.78 * day)
-    var haze := Color(0.85, 0.64, 0.38) * (0.28 + 0.72 * day)
-    gray.a = 1.0
-    haze.a = 1.0
-    var base_top := Color(0.02, 0.03, 0.09).lerp(Color(0.22, 0.46, 0.88), day)
-    var base_hor := Color(0.06, 0.07, 0.14).lerp(Color(0.68, 0.8, 0.92), day).lerp(Color(1.0, 0.5, 0.25), warm * 0.8)
-    var top: Color = base_top.lerp(gray, gloom * 0.75).lerp(haze, dust * 0.8)
-    var hor: Color = base_hor.lerp(gray.lightened(0.1), gloom * 0.8).lerp(haze, dust * 0.9)
-    top = top.lerp(Color(0.85, 0.9, 1.0), flash * 0.7)
-    hor = hor.lerp(Color(0.9, 0.93, 1.0), flash * 0.7)
-    sky_mat.sky_top_color = top
-    sky_mat.sky_horizon_color = hor
-    sky_mat.ground_horizon_color = hor
-    sky_mat.ground_bottom_color = top.darkened(0.5)
-    env.fog_light_color = base_hor.lerp(gray.lightened(0.08), rain * 0.6).lerp(haze, dust * 0.85)
-    var base_fog := lerpf(0.007, 0.0035, day)
-    env.fog_density = base_fog * (1.0 + rain * 2.2 + dust * 3.5 + cloud * 0.5)
-    env.ambient_light_energy = lerpf(0.5, 0.7, day) + 2.2 * flash
+    dn.call("set_weather_effects", gloom, dust, flash, rain, cloud)
     var mpl := world.get_node_or_null("MaterialsPlus")
     if mpl != null:
         var rm = mpl.get("road_mat")
