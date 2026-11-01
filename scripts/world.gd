@@ -840,6 +840,7 @@ func _window_multimesh(xforms: Array, mat: Material):
     add_child(inst)
 
 func _add_windows(cx: float, cz: float, w: float, d: float, h: float):
+    return
     var rng := RandomNumberGenerator.new()
     rng.seed = int(absf(cx) * 73.0 + absf(cz) * 131.0 + h * 17.0) + 11
     var floors := int((h - 2.0) / 3.2)
@@ -1368,6 +1369,7 @@ func _add_kenney_windows(holder: Node3D, seed_value: int) -> void:
     _window_multimesh(lit_xforms, _glow_mat(Color(1.0, 0.82, 0.5), 2.2))
 
 func _tn_building(cx: float, cz: float, w: float, d: float, h: float, style: int, with_sign := true) -> void:
+    building_rects.append(Rect2(cx - w * 0.5, cz - d * 0.5, w, d))
     if with_sign and posmod(int(absf(cx) * 0.13 + absf(cz) * 0.29) + style, 3) != 0:
         var tints: Array = [Color(0.9, 0.82, 0.68), Color(0.86, 0.76, 0.6), Color(0.82, 0.8, 0.72), Color(0.92, 0.72, 0.52), Color(0.72, 0.8, 0.86)]
         var seed_value := style * 977 + int(absf(cx) * 31.0 + absf(cz) * 17.0)
@@ -1629,3 +1631,5 @@ func _create_public_plaza(pos: Vector3) -> void:
     ]:
         _box(self, Vector3(0.22, 0.18, 0.22),
             pos + offset, flower)
+
+var building_rects: Array = []

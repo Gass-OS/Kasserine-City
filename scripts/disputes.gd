@@ -209,6 +209,7 @@ func _spawn() -> void:
 func _lines() -> void:
     if not is_instance_valid(bub_a) or not is_instance_valid(bub_b):
         return
+    _shout()
     if line_i % 2 == 0:
         bub_a.text = String(kind["a"])
         bub_a.modulate = Color(1, 1, 1)
@@ -374,3 +375,10 @@ func _process(delta: float) -> void:
             dismissed = false
     if active_t > 170.0:
         _expire()
+
+const SfxLib = preload("res://scripts/sfx.gd")
+
+func _shout() -> void:
+    var who := pa if line_i % 2 == 0 else pb
+    if is_instance_valid(who):
+        SfxLib.voice_3d(who, 1.8, int(who.get_instance_id() % 8), true, 8.0)

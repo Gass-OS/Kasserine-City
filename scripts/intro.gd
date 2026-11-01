@@ -26,6 +26,7 @@ var active := false
 var finishing := false
 
 func _ready() -> void:
+    _cover()
     for i in range(10):
         await get_tree().process_frame
     world = get_parent() as Node3D
@@ -72,9 +73,6 @@ func _begin() -> void:
     var crime := world.get_node_or_null("Crime")
     if crime != null:
         crime.set("cooldown", 25.0 + DUR)
-    layer = CanvasLayer.new()
-    layer.layer = 100
-    add_child(layer)
     var g := Gradient.new()
     g.colors = PackedColorArray([Color(0, 0, 0, 0.0), Color(0, 0, 0, 0.0), Color(0, 0, 0, 0.7)])
     g.offsets = PackedFloat32Array([0.0, 0.55, 1.0])
@@ -112,11 +110,7 @@ func _begin() -> void:
     card.modulate.a = 0.0
     card.mouse_filter = Control.MOUSE_FILTER_IGNORE
     layer.add_child(card)
-    fade = ColorRect.new()
-    fade.color = Color(0, 0, 0, 1.0)
-    fade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    layer.add_child(fade)
+    layer.move_child(fade, -1)
     var skip := Button.new()
     skip.text = "SKIP  >>"
     skip.position = Vector2(1140, 652)
@@ -199,3 +193,12 @@ func _finish() -> void:
     tw.tween_property(bar_top, "offset_bottom", 0.0, 0.7)
     tw.tween_property(bar_bot, "offset_top", 0.0, 0.7)
     tw.chain().tween_callback(layer.queue_free)
+
+func _cover() -> void:
+    layer = CanvasLayer.new()
+    layer.layer = 100
+    add_child(layer)
+    fade = ColorRect.new()
+    fade.color = Color(0, 0, 0, 1.0)
+    fade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    layer.add_child(fade)
