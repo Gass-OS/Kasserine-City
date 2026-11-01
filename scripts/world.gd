@@ -463,7 +463,7 @@ func _create_car_old(pos: Vector3, paint: Color, angle: float) -> Node3D:
 
 func _create_traffic_car(start: Vector3, paint: Color,
         route: Array, speed: float):
-    var car := _create_car(start, paint, 0.0)
+    var car := _create_car(start, paint, 0.0, true)
     traffic_cars.append(car)
     traffic_paths.append(route)
     traffic_targets.append(1)
@@ -784,12 +784,19 @@ func _car_box(car: Node3D, size: Vector3, pos: Vector3, mat: Material) -> MeshIn
     bm.size = size
     return _car_mesh(car, bm, pos, mat)
 
-func _create_car_s2(pos: Vector3, paint: Color, angle: float) -> Node3D:
-    var car := Node3D.new()
-    car.name = "ParkedCar"
+func _create_car_s2(pos: Vector3, paint: Color, angle: float, moving: bool = false) -> Node3D:
+    var car: Node3D
+    if moving:
+        var moving_body := AnimatableBody3D.new()
+        moving_body.sync_to_physics = true
+        car = moving_body
+    else:
+        car = StaticBody3D.new()
+    car.name = "TrafficCar" if moving else "ParkedCar"
     car.position = pos
     car.rotation.y = angle
     add_child(car)
+    _add_vehicle_collision(car, Vector3(1.72, 1.45, 4.0), Vector3(0, 0.75, 0))
 
     var body := StandardMaterial3D.new()
     body.albedo_color = paint
@@ -1102,18 +1109,40 @@ func _tn_extras() -> void:
 const KenneyKit = preload("res://scripts/kenney.gd")
 var _car_counter := 0
 
-func _create_car(pos: Vector3, paint: Color, angle: float) -> Node3D:
+func _add_vehicle_collision(car: Node3D, size: Vector3, center: Vector3) -> void:
+    var collider := CollisionShape3D.new()
+    var shape := BoxShape3D.new()
+    shape.size = size
+    collider.shape = shape
+    collider.position = center
+    car.add_child(collider)
+
+
+func _create_car(pos: Vector3, paint: Color, angle: float, moving: bool = false) -> Node3D:
     _car_counter += 1
     var spawned = KenneyKit.car(_car_counter + int(paint.r * 9.0 + paint.g * 5.0))
     if spawned == null:
-        return _create_car_s2(pos, paint, angle)
-    var car := Node3D.new()
-    car.name = "ParkedCar"
+        return _create_car_s2(pos, paint, angle, moving)
+
+    var car: Node3D
+    if moving:
+        var moving_body := AnimatableBody3D.new()
+        moving_body.sync_to_physics = true
+        car = moving_body
+    else:
+        car = StaticBody3D.new()
+    car.name = "TrafficCar" if moving else "ParkedCar"
     car.position = pos
     car.rotation.y = angle
     add_child(car)
     car.add_child(spawned["node"])
     var dims: Vector3 = spawned["size"]
+    var collision_height := maxf(dims.y, 1.35)
+    _add_vehicle_collision(
+        car,
+        Vector3(maxf(dims.x * 0.90, 1.35), collision_height, maxf(dims.z * 0.90, 3.2)),
+        Vector3(0, collision_height * 0.5, 0)
+    )
     var hz := dims.z * 0.5
     var hx := dims.x * 0.32
     var hy := dims.y * 0.4
