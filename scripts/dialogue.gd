@@ -25,6 +25,7 @@ const NIGHT_PAIRS = [
 var world: Node
 var player: Node3D
 var dn: Node
+var gameplay: Node
 var bubbles := {}
 var timer := 5.0
 var busy := false
@@ -35,6 +36,7 @@ func _ready() -> void:
     world = get_parent()
     player = world.get_node_or_null("Player") as Node3D
     dn = world.get_node_or_null("DayNight")
+    gameplay = world.get_node_or_null("Gameplay")
     var citizens = world.get("citizens")
     if citizens == null:
         return
@@ -109,9 +111,22 @@ func _make_bubble(parent: Node3D) -> Node3D:
     root.add_child(label)
     return root
 
+func _speak_line(text: String) -> bool:
+    if gameplay != null and not bool(gameplay.get("voice_enabled")):
+        return false
+
+    var voices = DisplayServer.tts_get_voices()
+    if voices.is_empty():
+        return false
+
+    var voice_id := str(voices[0].get("id", ""))
+    DisplayServer.tts_speak(text, voice_id, 0.85, 1.0, 1.0, 0, false)
+    return true
+
 func _say(c: Node3D, text: String, hold: float) -> void:
     if not is_instance_valid(c):
         return
+    var voice_started := _speak_line(text)
     var root: Node3D = bubbles[c]
     var label := root.get_node("Text") as Label3D
     var bg := root.get_node("Bg") as MeshInstance3D
@@ -123,6 +138,11 @@ func _say(c: Node3D, text: String, hold: float) -> void:
     for i in range(1, text.length() + 1):
         label.text = text.substr(0, i)
         await get_tree().create_timer(0.03).timeout
+
+    if voice_started:
+        while DisplayServer.tts_is_speaking():
+            await get_tree().create_timer(0.1).timeout
+
     await get_tree().create_timer(hold).timeout
     root.visible = false
 
