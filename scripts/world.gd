@@ -85,16 +85,16 @@ func _box(parent: Node3D, size: Vector3, pos: Vector3, color: Color, solid := fa
         parent.add_child(body)
 
 func _create_city():
-    _box(self, Vector3(312, 1, 312), Vector3(0, -0.55, 0), Color(0.66, 0.58, 0.4), true)
+    _box(self, Vector3(360, 1, 360), Vector3(0, -0.55, 0), Color(0.66, 0.58, 0.4), true)
 
     var road = Color(0.16, 0.17, 0.18)
     var line = Color(0.92, 0.83, 0.55)
 
-    for i in range(-6, 7):
+    for i in range(-7, 8):
         var p = float(i) * 24.0
-        _box(self, Vector3(8, 0.08, 300), Vector3(p, 0.02, 0), road)
-        _box(self, Vector3(300, 0.08, 8), Vector3(0, 0.03, p), road)
-        for j in range(-13, 14):
+        _box(self, Vector3(8, 0.08, 348), Vector3(p, 0.02, 0), road)
+        _box(self, Vector3(348, 0.08, 8), Vector3(0, 0.03, p), road)
+        for j in range(-15, 16):
             _box(self, Vector3(0.16, 0.02, 2.5), Vector3(p, 0.075, j * 11.0), line)
             _box(self, Vector3(2.5, 0.02, 0.16), Vector3(j * 11.0, 0.08, p), line)
 
@@ -108,7 +108,10 @@ func _create_city():
         Color(0.68, 0.59, 0.46)
     ]
 
-    for x in range(-6, 6):
+    _create_road_details()
+    _create_sidewalks_and_parking()
+
+    for x in range(-7, 7):
         for z in range(-6, 6):
             if x >= -2 and x <= 1 and z >= -2 and z <= 1:
                 continue
@@ -153,7 +156,21 @@ func _create_people():
         Vector3(20, 0, -13),
         Vector3(-19, 0, -19),
         Vector3(6, 0, -22),
-        Vector3(-6, 0, 22)
+        Vector3(-6, 0, 22),
+        Vector3(-6, 0, -10),
+        Vector3(18, 0, -10),
+        Vector3(-6, 0, 10),
+        Vector3(18, 0, 10),
+        Vector3(-30, 0, -10),
+        Vector3(-6, 0, -34),
+        Vector3(10, 0, -34),
+        Vector3(34, 0, -10),
+        Vector3(-34, 0, 10),
+        Vector3(-10, 0, 34),
+        Vector3(18, 0, 34),
+        Vector3(42, 0, 10),
+        Vector3(58, 0, -10),
+        Vector3(-58, 0, 10)
     ]
     for i in range(places.size()):
         var person = Node3D.new()
@@ -198,6 +215,24 @@ func _create_people():
         Vector3(11, 5.5, 10), Color(0.82, 0.84, 0.79))
     _create_landmark_building("CAFE", Vector3(36, 0, 36),
         Vector3(8, 3.5, 8), Color(0.73, 0.48, 0.31))
+
+    # Stage 14: additional civic buildings in the central district.
+    _create_landmark_building("PHARMACY", Vector3(-36, 0, -12),
+        Vector3(9, 4, 8), Color(0.72, 0.82, 0.70))
+    _create_landmark_building("POST OFFICE", Vector3(-12, 0, -36),
+        Vector3(10, 4.5, 9), Color(0.79, 0.68, 0.48))
+    _create_landmark_building("FIRE STATION", Vector3(-12, 0, -12),
+        Vector3(10, 5, 9), Color(0.72, 0.30, 0.24))
+    _create_landmark_building("LIBRARY", Vector3(-12, 0, 12),
+        Vector3(10, 5, 9), Color(0.72, 0.67, 0.55))
+    _create_landmark_building("STADIUM", Vector3(12, 0, -12),
+        Vector3(11, 5, 10), Color(0.48, 0.62, 0.43))
+    _create_landmark_building("MUNICIPALITY", Vector3(12, 0, 12),
+        Vector3(10, 5, 9), Color(0.78, 0.73, 0.62))
+    _create_landmark_building("BAKERY", Vector3(12, 0, 36),
+        Vector3(9, 4, 8), Color(0.82, 0.61, 0.38))
+    _create_landmark_building("BUS STATION", Vector3(36, 0, 12),
+        Vector3(10, 4, 9), Color(0.48, 0.60, 0.68))
 
 func _human(root: Node3D, index: int):
     var model = CharacterModel.build(index)
@@ -250,7 +285,19 @@ func _create_nature_and_vehicles():
         Vector3(94, 0, 48), Vector3(70, 0, 94),
         Vector3(38, 0, 94), Vector3(0, 0, 94),
         Vector3(-38, 0, 94), Vector3(-75, 0, 70),
-        Vector3(-94, 0, 35), Vector3(-94, 0, 0)
+        Vector3(-94, 0, 35), Vector3(-94, 0, 0),
+        Vector3(-145, 0, -110), Vector3(-110, 0, -145),
+        Vector3(110, 0, -145), Vector3(145, 0, -110),
+        Vector3(145, 0, 110), Vector3(110, 0, 145),
+        Vector3(-110, 0, 145), Vector3(-145, 0, 110),
+        Vector3(-145, 0, -45), Vector3(145, 0, 45),
+        Vector3(-45, 0, 145), Vector3(45, 0, -145),
+        Vector3(-130, 0, 0), Vector3(130, 0, 0),
+        Vector3(0, 0, 130), Vector3(0, 0, -130),
+        Vector3(-174, 0, -120), Vector3(-120, 0, -174),
+        Vector3(120, 0, -174), Vector3(174, 0, -120),
+        Vector3(174, 0, 120), Vector3(120, 0, 174),
+        Vector3(-120, 0, 174), Vector3(-174, 0, 120)
     ]
     for i in range(tree_positions.size()):
         _create_tree(tree_positions[i], 0.8 + float(i % 4) * 0.12)
@@ -260,6 +307,13 @@ func _create_nature_and_vehicles():
     _create_animal(Vector3(42, 0, 15), Color(0.36, 0.30, 0.24), "DOG")
     _create_animal(Vector3(-42, 0, -15), Color(0.75, 0.68, 0.52), "CAT")
     _create_animal(Vector3(68, 0, 68), Color(0.46, 0.28, 0.14), "DOG")
+    # Stage 14: more local street animals.
+    _create_animal(Vector3(-58, 0, 42), Color(0.72, 0.65, 0.48), "CAT")
+    _create_animal(Vector3(58, 0, -42), Color(0.55, 0.32, 0.16), "DOG")
+    _create_animal(Vector3(-82, 0, 72), Color(0.78, 0.72, 0.60), "SHEEP")
+    _create_animal(Vector3(82, 0, -72), Color(0.68, 0.58, 0.42), "GOAT")
+    _create_animal(Vector3(112, 0, 82), Color(0.82, 0.76, 0.62), "CHICKEN")
+    _create_animal(Vector3(-112, 0, -82), Color(0.42, 0.30, 0.20), "DOG")
 
     _create_street_lights()
 
@@ -279,6 +333,21 @@ func _create_nature_and_vehicles():
     _create_traffic_car(Vector3(24, 0, 0), Color(0.12, 0.12, 0.14),
         [Vector3(24, 0, 0), Vector3(48, 0, 0),
          Vector3(48, 0, 24), Vector3(24, 0, 24)], 4.0)
+
+
+    # Stage 14: parked street vehicles.
+    _create_car(Vector3(7.5, 0, -54), Color(0.78, 0.76, 0.68), 0.0)
+    _create_car(Vector3(7.5, 0, -6), Color(0.12, 0.28, 0.62), 0.0)
+    _create_car(Vector3(7.5, 0, 42), Color(0.72, 0.16, 0.12), 0.0)
+    _create_car(Vector3(31.5, 0, 90), Color(0.18, 0.42, 0.25), 0.0)
+
+    # Local motorcycles parked along the sidewalks.
+    _create_motorcycle(Vector3(-7.5, 0, -78), Color(0.75, 0.12, 0.08), 0.0)
+    _create_motorcycle(Vector3(-7.5, 0, -30), Color(0.12, 0.14, 0.16), 0.0)
+    _create_motorcycle(Vector3(-7.5, 0, 18), Color(0.08, 0.30, 0.72), 0.0)
+    _create_motorcycle(Vector3(-7.5, 0, 66), Color(0.78, 0.68, 0.12), 0.0)
+    _create_motorcycle(Vector3(31.5, 0, -78), Color(0.16, 0.16, 0.18), 0.0)
+    _create_motorcycle(Vector3(31.5, 0, 18), Color(0.68, 0.12, 0.10), 0.0)
 
 func _create_tree(pos: Vector3, scale_factor: float):
     var tree = Node3D.new()
@@ -1015,3 +1084,254 @@ func _tn_building(cx: float, cz: float, w: float, d: float, h: float, style: int
             add_child(holder)
             return
     _tn_building_proc(cx, cz, w, d, h, style, with_sign)
+
+
+# Stage 14: simple low-poly motorcycle model.
+func _create_motorcycle(pos: Vector3, paint: Color, angle: float) -> Node3D:
+    var bike := Node3D.new()
+    bike.name = "ParkedMotorcycle"
+    bike.position = pos
+    bike.rotation.y = angle
+    add_child(bike)
+
+    var frame_mat := StandardMaterial3D.new()
+    frame_mat.albedo_color = Color(0.12, 0.13, 0.14)
+    frame_mat.metallic = 0.45
+    frame_mat.roughness = 0.42
+
+    var body_mat := StandardMaterial3D.new()
+    body_mat.albedo_color = paint
+    body_mat.metallic = 0.25
+    body_mat.roughness = 0.38
+
+    var rubber := StandardMaterial3D.new()
+    rubber.albedo_color = Color(0.035, 0.035, 0.04)
+    rubber.roughness = 0.92
+
+    # Two wheels, with their cylinder axes turned across the motorcycle.
+    for z_offset in [-0.62, 0.62]:
+        var wheel := MeshInstance3D.new()
+        var wheel_mesh := CylinderMesh.new()
+        wheel_mesh.top_radius = 0.34
+        wheel_mesh.bottom_radius = 0.34
+        wheel_mesh.height = 0.13
+        wheel.mesh = wheel_mesh
+        wheel.material_override = rubber
+        wheel.position = Vector3(0, 0.35, z_offset)
+        wheel.rotation.x = PI * 0.5
+        bike.add_child(wheel)
+
+    _box(bike, Vector3(0.16, 0.16, 0.95),
+        Vector3(0, 0.65, 0), frame_mat.albedo_color)
+    _box(bike, Vector3(0.38, 0.24, 0.42),
+        Vector3(0, 0.83, -0.12), paint)
+    _box(bike, Vector3(0.28, 0.12, 0.42),
+        Vector3(0, 0.96, 0.38), Color(0.07, 0.07, 0.075))
+    _box(bike, Vector3(0.62, 0.07, 0.09),
+        Vector3(0, 1.03, -0.57), frame_mat.albedo_color)
+
+    var lamp := MeshInstance3D.new()
+    var lamp_mesh := SphereMesh.new()
+    lamp_mesh.radius = 0.11
+    lamp_mesh.height = 0.22
+    lamp.mesh = lamp_mesh
+    lamp.position = Vector3(0, 0.86, -0.67)
+
+    var lamp_mat := StandardMaterial3D.new()
+    lamp_mat.albedo_color = Color(1.0, 0.9, 0.62)
+    lamp_mat.emission_enabled = true
+    lamp_mat.emission = Color(1.0, 0.8, 0.4)
+    lamp_mat.emission_energy_multiplier = 1.5
+    lamp.material_override = lamp_mat
+    bike.add_child(lamp)
+
+    return bike
+
+
+# Stage 14: road markings and pedestrian crossings.
+func _create_road_details() -> void:
+    var marking := Color(0.92, 0.89, 0.76)
+    var yellow := Color(0.88, 0.68, 0.16)
+
+    # Dashed center markings on the two main streets.
+    for i in range(-13, 14):
+        var p := float(i) * 12.0
+        _box(self, Vector3(0.16, 0.025, 3.5),
+            Vector3(0, 0.075, p), yellow)
+        _box(self, Vector3(3.5, 0.025, 0.16),
+            Vector3(p, 0.075, 0), yellow)
+
+    # Four intersections with zebra crossings on every approach.
+    for ix in [-48.0, 48.0]:
+        for iz in [-48.0, 48.0]:
+            for stripe in range(-3, 4):
+                var offset := float(stripe) * 0.88
+
+                # Crossings across north/south-running roads.
+                for side in [-1.0, 1.0]:
+                    _box(self, Vector3(0.62, 0.025, 0.72),
+                        Vector3(ix + offset, 0.085,
+                            iz + side * 5.0), marking)
+
+                # Crossings across east/west-running roads.
+                for side in [-1.0, 1.0]:
+                    _box(self, Vector3(0.72, 0.025, 0.62),
+                        Vector3(ix + side * 5.0, 0.085,
+                            iz + offset), marking)
+
+
+# Stage 14: raised sidewalks and roadside parking markings.
+func _create_sidewalks_and_parking() -> void:
+    var sidewalk := Color(0.48, 0.47, 0.43)
+    var curb := Color(0.72, 0.69, 0.61)
+    var white := Color(0.92, 0.91, 0.82)
+
+    # Sidewalks run beside every road in the expanded grid.
+    # Their top surface is 20 cm above the road surface.
+    for i in range(-7, 8):
+        var p := float(i) * 24.0
+
+        for side in [-1.0, 1.0]:
+            _box(self, Vector3(1.4, 0.4, 348),
+                Vector3(p + side * 5.0, 0.07, 0), sidewalk)
+            _box(self, Vector3(348, 0.4, 1.4),
+                Vector3(0, 0.07, p + side * 5.0), sidewalk)
+
+            # Light curb edge facing the roadway.
+            _box(self, Vector3(0.16, 0.12, 348),
+                Vector3(p + side * 4.22, 0.13, 0), curb)
+            _box(self, Vector3(348, 0.12, 0.16),
+                Vector3(0, 0.13, p + side * 4.22), curb)
+
+    # Four marked parallel parking bays in a dedicated outer parking area.
+    # Parking apron beside the road, not on the driving lane.
+    var parking_x := 129.0
+    var parking_z := 132.0
+    _box(self, Vector3(5.8, 0.08, 14.4),
+        Vector3(parking_x, 0.065, 137.0), Color(0.16, 0.17, 0.18))
+
+    for i in range(4):
+        var z := parking_z + float(i) * 3.2
+
+        _box(self, Vector3(0.12, 0.025, 2.8),
+            Vector3(parking_x - 1.35, 0.075, z), white)
+        _box(self, Vector3(0.12, 0.025, 2.8),
+            Vector3(parking_x + 1.35, 0.075, z), white)
+
+    _box(self, Vector3(2.8, 0.025, 0.12),
+        Vector3(parking_x, 0.075, parking_z - 1.4), white)
+    _box(self, Vector3(2.8, 0.025, 0.12),
+        Vector3(parking_x, 0.075, parking_z + 3.2 * 3 + 1.4), white)
+
+    # Benches placed on sidewalks, away from junctions.
+    _create_street_bench(Vector3(5.0, 0.27, 72.0))
+    _create_street_bench(Vector3(-5.0, 0.27, -72.0))
+    _create_street_bench(Vector3(53.0, 0.27, 96.0))
+    _create_street_bench(Vector3(-53.0, 0.27, -96.0))
+
+    # Public rubbish bins along pedestrian routes.
+    _create_rubbish_bin(Vector3(5.0, 0.27, 36.0))
+    _create_rubbish_bin(Vector3(-5.0, 0.27, -36.0))
+    _create_rubbish_bin(Vector3(53.0, 0.27, 48.0))
+    _create_rubbish_bin(Vector3(-53.0, 0.27, -48.0))
+    _create_rubbish_bin(Vector3(29.0, 0.27, 96.0))
+    _create_rubbish_bin(Vector3(-29.0, 0.27, -96.0))
+
+    # Bus shelter beside the existing bus station.
+    _create_bus_stop(Vector3(53.0, 0.27, 12.0))
+    _create_public_plaza(Vector3(60.0, 0.0, 24.0))
+
+
+# Stage 14: low-poly public street bench.
+func _create_street_bench(pos: Vector3) -> void:
+    var wood := Color(0.40, 0.22, 0.11)
+    var metal := Color(0.12, 0.13, 0.14)
+
+    _box(self, Vector3(1.6, 0.12, 0.42),
+        pos + Vector3(0, 0.42, 0), wood)
+    _box(self, Vector3(1.6, 0.55, 0.10),
+        pos + Vector3(0, 0.76, 0.16), wood)
+    for x in [-0.62, 0.62]:
+        _box(self, Vector3(0.10, 0.32, 0.34),
+            pos + Vector3(x, 0.16, 0), metal)
+
+# Stage 14: public rubbish bin.
+func _create_rubbish_bin(pos: Vector3) -> void:
+    var bin_color := Color(0.16, 0.34, 0.24)
+    _box(self, Vector3(0.42, 0.62, 0.42),
+        pos + Vector3(0, 0.31, 0), bin_color)
+    _box(self, Vector3(0.48, 0.08, 0.48),
+        pos + Vector3(0, 0.66, 0), Color(0.10, 0.12, 0.11))
+
+
+# Stage 14: covered public bus stop.
+func _create_bus_stop(pos: Vector3) -> void:
+    var metal := Color(0.12, 0.16, 0.19)
+    var roof_color := Color(0.18, 0.25, 0.30)
+    var glass := Color(0.35, 0.58, 0.64, 0.55)
+    var blue := Color(0.05, 0.25, 0.72)
+
+    # Shelter roof and four supports.
+    _box(self, Vector3(3.8, 0.16, 2.0),
+        pos + Vector3(0, 2.35, 0), roof_color)
+
+    for x in [-1.7, 1.7]:
+        for z in [-0.82, 0.82]:
+            _box(self, Vector3(0.10, 2.3, 0.10),
+                pos + Vector3(x, 1.15, z), metal)
+
+    # Rear transparent shelter panels.
+    _box(self, Vector3(3.4, 1.55, 0.06),
+        pos + Vector3(0, 1.35, 0.82), glass)
+
+    # Passenger bench.
+    _box(self, Vector3(2.0, 0.12, 0.42),
+        pos + Vector3(0, 0.52, 0.35), Color(0.38, 0.23, 0.13))
+    _box(self, Vector3(2.0, 0.48, 0.10),
+        pos + Vector3(0, 0.82, 0.53), Color(0.38, 0.23, 0.13))
+
+    # Blue bus-stop sign on a separate pole.
+    _box(self, Vector3(0.10, 2.5, 0.10),
+        pos + Vector3(2.25, 1.25, -0.35), metal)
+    _box(self, Vector3(0.65, 0.75, 0.12),
+        pos + Vector3(2.25, 2.35, -0.35), blue)
+
+
+# Stage 14: landscaped pedestrian pocket plaza.
+func _create_public_plaza(pos: Vector3) -> void:
+    var paving := Color(0.57, 0.54, 0.47)
+    var border := Color(0.34, 0.35, 0.31)
+    var soil := Color(0.25, 0.17, 0.10)
+    var flower := Color(0.85, 0.28, 0.38)
+
+    # Paved pedestrian gathering area.
+    _box(self, Vector3(8.0, 0.10, 8.0),
+        pos + Vector3(0, 0.05, 0), paving)
+
+    # Four low flower planters.
+    for offset in [
+        Vector3(-2.8, 0, -2.8),
+        Vector3(2.8, 0, -2.8),
+        Vector3(-2.8, 0, 2.8),
+        Vector3(2.8, 0, 2.8)
+    ]:
+        _box(self, Vector3(1.35, 0.38, 1.35),
+            pos + offset + Vector3(0, 0.24, 0), border)
+        _box(self, Vector3(1.12, 0.10, 1.12),
+            pos + offset + Vector3(0, 0.48, 0), soil)
+        _create_tree(pos + offset + Vector3(0, 0.53, 0),
+            0.75, Color(0.20, 0.42, 0.19))
+
+    # Two public benches.
+    _create_street_bench(pos + Vector3(-1.8, 0.10, 0))
+    _create_street_bench(pos + Vector3(1.8, 0.10, 0))
+
+    # Decorative flower clusters.
+    for offset in [
+        Vector3(-0.9, 0.58, -2.8),
+        Vector3(0.9, 0.58, -2.8),
+        Vector3(-0.9, 0.58, 2.8),
+        Vector3(0.9, 0.58, 2.8)
+    ]:
+        _box(self, Vector3(0.22, 0.18, 0.22),
+            pos + offset, flower)
