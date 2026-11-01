@@ -17,19 +17,17 @@ var takeover := false
 func _ready() -> void:
     for i in range(10):
         await get_tree().process_frame
+
     world = get_parent() as Node3D
     if world == null:
         return
+
     player = world.get_node_or_null("Player") as Node3D
     drive = world.get_node_or_null("Drive")
+
+    # Keep parked-car cleanup, but do not spawn the unsafe
+    # block-crossing fleet. Original traffic belongs to world.gd.
     _tidy_parked()
-    _spawn_fleet()
-    var tc = world.get("traffic_cars")
-    if tc != null:
-        for c in tc:
-            if is_instance_valid(c):
-                snapshot[c] = c.position
-                c.add_to_group("ambient_vehicle")
 
 func _mat(color: Color, rough := 0.7, metal := 0.0) -> StandardMaterial3D:
     var m := StandardMaterial3D.new()
@@ -252,20 +250,10 @@ func _siren_factor(p: Vector3) -> float:
         return 1.0
     return 0.25 if p.distance_to(pc.global_position) < 24.0 else 1.0
 
-func _process(delta: float) -> void:
-    if world == null:
-        return
-    cache_t += delta
-    if cache_t > 0.1:
-        cache_t = 0.0
-        _refresh()
-    if check_t > 0.0:
-        check_t -= delta
-        if check_t <= 0.0:
-            _check_frozen()
-    if takeover:
-        _drive_old(delta)
-    _drive_fleet(delta)
+func _process(_delta: float) -> void:
+    # Traffic movement is owned by world.gd only.
+    # This controller must not take over or move the same vehicles.
+    pass
 
 func _check_frozen() -> void:
     var tc = world.get("traffic_cars")
