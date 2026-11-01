@@ -145,6 +145,7 @@ var traffic_cars: Array[Node3D] = []
 var traffic_paths: Array = []
 var traffic_targets: Array[int] = []
 var traffic_speeds: Array[float] = []
+var traffic_horn_timer := 9.0
 
 func _create_people():
     var places = [
@@ -544,6 +545,15 @@ func _create_traffic_car(start: Vector3, paint: Color,
     car.add_child(engine)
     engine.play()
 
+    var horn := AudioStreamPlayer3D.new()
+    horn.name = "TrafficHornAudio"
+    horn.stream = Sfx.get_sound("horn")
+    horn.volume_db = -8.0
+    horn.max_distance = 34.0
+    horn.unit_size = 8.0
+    horn.position = Vector3(0.0, 0.8, 0.0)
+    car.add_child(horn)
+
 func _update_traffic(delta: float) -> void:
     # Plan all vehicle movements before applying any of them.
     # This prevents cars from independently moving into the same space.
@@ -702,10 +712,39 @@ func _update_pedestrians(delta: float):
         person.position += direction * citizen_speeds[i] * delta
         person.rotation.y = atan2(-direction.x, -direction.z)
 
+func _update_traffic_horns(delta: float) -> void:
+    traffic_horn_timer -= delta
+    if traffic_horn_timer > 0.0:
+        return
+
+    traffic_horn_timer = randf_range(14.0, 25.0)
+    var player := get_node_or_null("Player") as Node3D
+    if player == null:
+        return
+
+    var nearest: Node3D = null
+    var nearest_distance := 23.0
+
+    for car in traffic_cars:
+        if not is_instance_valid(car):
+            continue
+        var distance := car.global_position.distance_to(player.global_position)
+        if distance < nearest_distance:
+            nearest_distance = distance
+            nearest = car
+
+    if nearest == null or randf() > 0.65:
+        return
+
+    var horn := nearest.get_node_or_null("TrafficHornAudio") as AudioStreamPlayer3D
+    if horn != null and not horn.playing:
+        horn.play()
+
 func _process(delta):
     city_clock += delta
     _update_pedestrians(delta)
     _update_traffic(delta)
+    _update_traffic_horns(delta)
 
     animal_clock += delta
     for i in range(animal_nodes.size()):

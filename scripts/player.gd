@@ -1,5 +1,7 @@
 extends CharacterBody3D
 
+const Sfx = preload("res://scripts/sfx.gd")
+
 const SPEED = 6.0
 const SPRINT_SPEED = 10.0
 const JUMP_SPEED = 4.5
@@ -21,6 +23,8 @@ var camera_pivot: Node3D
 var camera: Camera3D
 var hud: TouchHUD
 var status_label: Label
+var footstep_player: AudioStreamPlayer3D
+var footstep_timer := 0.0
 
 class TouchHUD extends Control:
     var joystick_vector := Vector2.ZERO
@@ -106,6 +110,15 @@ func _ready():
 
     get_viewport().size_changed.connect(_refresh_hud)
     _refresh_hud()
+
+    footstep_player = AudioStreamPlayer3D.new()
+    footstep_player.name = "PlayerFootsteps"
+    footstep_player.stream = Sfx.get_sound("footstep")
+    footstep_player.volume_db = -13.0
+    footstep_player.max_distance = 18.0
+    footstep_player.unit_size = 5.0
+    footstep_player.position = Vector3(0.0, 0.12, 0.0)
+    add_child(footstep_player)
 
 func _refresh_hud():
     if is_instance_valid(hud):
@@ -234,3 +247,10 @@ func _physics_process(delta):
     jump_requested = false
 
     move_and_slide()
+
+    footstep_timer = maxf(0.0, footstep_timer - delta)
+    var horizontal_speed := Vector2(velocity.x, velocity.z).length()
+    if is_on_floor() and horizontal_speed > 1.0 and footstep_timer <= 0.0:
+        if footstep_player != null and not footstep_player.playing:
+            footstep_player.play()
+        footstep_timer = 0.30 if current_speed > SPEED else 0.43

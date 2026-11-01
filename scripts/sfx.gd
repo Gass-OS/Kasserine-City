@@ -84,11 +84,31 @@ static func _siren() -> AudioStreamWAV:
         data.encode_s16(i * 2, int(clampf(s, -1.0, 1.0) * 32767.0))
     return _pack(data, true)
 
+static func _horn() -> AudioStreamWAV:
+    var n := int(0.48 * float(RATE))
+    var data := PackedByteArray()
+    data.resize(n * 2)
+    var phase_a := 0.0
+    var phase_b := 0.0
+    for i in range(n):
+        var t := float(i) / float(n)
+        phase_a += TAU * 430.0 / float(RATE)
+        phase_b += TAU * 540.0 / float(RATE)
+        var pulse := 1.0 if t < 0.34 else 0.0
+        var fade := minf(1.0, t * 35.0) * minf(1.0, (0.34 - t) * 18.0)
+        var sample := (sin(phase_a) * 0.65 + sin(phase_b) * 0.35) * pulse * fade
+        data.encode_s16(i * 2, int(clampf(sample * 0.65, -1.0, 1.0) * 32767.0))
+    return _pack(data, false)
+
 static func get_sound(n: String) -> AudioStreamWAV:
     if _cache.has(n):
         return _cache[n]
     var s: AudioStreamWAV
     match n:
+        "footstep":
+            s = _noise_burst(0.13, 0.30, 18.0, 0.72)
+        "horn":
+            s = _horn()
         "squelch":
             s = _noise_burst(0.14, 0.5, 5.0, 0.0)
         "beep":
