@@ -311,6 +311,9 @@ func _create_nature_and_vehicles():
             tree_pos.z += 8.0 if tree_pos.z >= 0.0 else -8.0
         _create_tree(tree_pos, 0.8 + float(i % 4) * 0.12)
 
+    # Stage 15: agricultural plots in the four unused outer corners.
+    _create_farm_fields()
+
     _create_animal(Vector3(-12, 0, 9), Color(0.55, 0.32, 0.16), "DOG")
     _create_animal(Vector3(12, 0, -10), Color(0.72, 0.65, 0.48), "CAT")
     _create_animal(Vector3(42, 0, 15), Color(0.36, 0.30, 0.24), "DOG")
@@ -393,6 +396,65 @@ func _add_windows_old(cx: float, cz: float, w: float, d: float, h: float):
                 var wz = cz + (float(col) - 0.5) * d * 0.48
                 _box(self, Vector3(0.08, 0.9, 0.85),
                     Vector3(cx + side * (w / 2.0 + 0.045), wy, wz), glass)
+
+func _create_farm_fields() -> void:
+    var plots = [
+        Vector3(-156, 0, -156),
+        Vector3(156, 0, -156),
+        Vector3(-156, 0, 156),
+        Vector3(156, 0, 156)
+    ]
+
+    var soil_colors = [
+        Color(0.38, 0.25, 0.13),
+        Color(0.43, 0.30, 0.16),
+        Color(0.36, 0.27, 0.15),
+        Color(0.46, 0.32, 0.17)
+    ]
+    var crop_colors = [
+        Color(0.31, 0.43, 0.16),
+        Color(0.43, 0.48, 0.18),
+        Color(0.35, 0.49, 0.20),
+        Color(0.48, 0.45, 0.17)
+    ]
+
+    for i in range(plots.size()):
+        var farm := Node3D.new()
+        farm.name = "FarmField_%02d" % i
+        farm.position = plots[i]
+        add_child(farm)
+
+        # Cultivated soil and a narrow walking path.
+        _box(farm, Vector3(13.5, 0.10, 13.5),
+            Vector3(0, 0.02, 0), soil_colors[i])
+        _box(farm, Vector3(1.15, 0.045, 9.5),
+            Vector3(0, 0.095, 0), Color(0.57, 0.43, 0.27))
+
+        # Six crop rows, leaving the middle path clear.
+        for row in range(6):
+            var x := -4.8 + float(row) * 1.92
+            if row >= 3:
+                x += 1.15
+            _box(farm, Vector3(0.48, 0.68, 8.6),
+                Vector3(x, 0.46, 0), crop_colors[i])
+
+        # Low perimeter fencing, kept inside the plot boundary.
+        var fence_color := Color(0.35, 0.24, 0.14)
+        for side in [-1.0, 1.0]:
+            _box(farm, Vector3(0.14, 0.62, 13.0),
+                Vector3(side * 6.55, 0.35, 0), fence_color)
+            _box(farm, Vector3(13.0, 0.62, 0.14),
+                Vector3(0, 0.35, side * 6.55), fence_color)
+
+        # Small farm sign.
+        var sign := Label3D.new()
+        sign.text = "KASSERINE FARM"
+        sign.font_size = 22
+        sign.position = Vector3(0, 1.5, -5.7)
+        sign.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+        sign.modulate = Color(1.0, 0.86, 0.56)
+        farm.add_child(sign)
+
 
 func _create_animal(pos: Vector3, coat: Color, kind: String):
     var animal = Node3D.new()
