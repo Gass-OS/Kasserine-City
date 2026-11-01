@@ -349,7 +349,7 @@ func _create_nature_and_vehicles():
     _create_motorcycle(Vector3(31.5, 0, -78), Color(0.16, 0.16, 0.18), 0.0)
     _create_motorcycle(Vector3(31.5, 0, 18), Color(0.68, 0.12, 0.10), 0.0)
 
-func _create_tree(pos: Vector3, scale_factor: float):
+func _create_tree(pos: Vector3, scale_factor: float, foliage_color: Color = Color(0.12, 0.35, 0.16)):
     var tree = Node3D.new()
     tree.name = "Tree"
     tree.position = pos
@@ -366,7 +366,7 @@ func _create_tree(pos: Vector3, scale_factor: float):
     crown.mesh = crown_mesh
     crown.position.y = 3.0
     var foliage = StandardMaterial3D.new()
-    foliage.albedo_color = Color(0.12, 0.35, 0.16)
+    foliage.albedo_color = foliage_color
     foliage.roughness = 1.0
     crown.material_override = foliage
     tree.add_child(crown)
