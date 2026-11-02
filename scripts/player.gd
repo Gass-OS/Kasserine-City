@@ -71,6 +71,8 @@ func _ready():
         add_child(character)
     else:
         var fallback = MeshInstance3D.new()
+        fallback.name = "PlayerCharacter"
+        fallback.set_meta("anim_status", "FBX LOAD FAILED -> capsule fallback")
         var body_mesh = CapsuleMesh.new()
         body_mesh.radius = 0.42
         body_mesh.height = 1.8

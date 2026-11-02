@@ -9,9 +9,18 @@ const SKINS = [
 ]
 
 static func build(skin_index: int) -> Node3D:
-    var packed = load(MODEL_PATH) as PackedScene
+    if not ResourceLoader.exists(MODEL_PATH):
+        push_error("GassCharacter: FBX resource does not exist: " + MODEL_PATH)
+        return null
+
+    var resource := ResourceLoader.load(MODEL_PATH)
+    if resource == null:
+        push_error("GassCharacter: FBX load returned null. Resource type: " + ResourceLoader.get_resource_type(MODEL_PATH))
+        return null
+
+    var packed := resource as PackedScene
     if packed == null:
-        push_warning("GassCharacter: FBX model failed to load")
+        push_error("GassCharacter: FBX is not a PackedScene. Loaded type: " + resource.get_class())
         return null
 
     var model = packed.instantiate() as Node3D
