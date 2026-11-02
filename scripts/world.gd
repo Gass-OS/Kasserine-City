@@ -3,22 +3,36 @@ extends Node3D
 const PlayerScript = preload("res://scripts/player.gd")
 const CharacterModel = preload("res://scripts/character_model.gd")
 const Sfx = preload("res://scripts/sfx.gd")
+const AttractionsScript = preload("res://scripts/attractions.gd")
 
 func _ready():
+    Watchdog.record("WORLD: startup entered")
     _create_environment()
+    Watchdog.record("WORLD: environment created")
     _create_city()
+    Watchdog.record("WORLD: city created")
     _tn_extras()
+    Watchdog.record("WORLD: extras created")
     _create_nature_and_vehicles()
+    Watchdog.record("WORLD: nature and vehicles created")
     var player = CharacterBody3D.new()
     player.set_script(PlayerScript)
     player.name = "Player"
     add_child(player)
     player.position = Vector3(0, 1, 12)
+    Watchdog.record("WORLD: player created")
     _create_people()
+    Watchdog.record("WORLD: citizens created")
+    var attractions := Node.new()
+    attractions.name = "Attractions"
+    attractions.set_script(AttractionsScript)
+    add_child(attractions)
+    Watchdog.record("WORLD: attractions queued")
     var gameplay = Node.new()
     gameplay.name = "Gameplay"
     gameplay.set_script(preload("res://scripts/gameplay.gd"))
     add_child(gameplay)
+    Watchdog.record("WORLD: startup complete")
 
 func _create_environment():
     # Cinematic Mediterranean sky, tuned for the existing Android renderer.

@@ -45,6 +45,7 @@ static func _lab(text: String, size: int, color: Color) -> Label:
     return l
 
 static func run(menu: Control) -> void:
+    Watchdog.record("PLAY: loader started")
     var tree := menu.get_tree()
     var old = menu.get("ui")
     if old != null:
@@ -83,8 +84,11 @@ static func run(menu: Control) -> void:
     var tip := _lab("", 18, Color(0.8, 0.85, 0.9))
     v.add_child(tip)
     var paths := _paths()
+    Watchdog.record("LOADER: requesting %d resources" % paths.size())
     for p in paths:
-        ResourceLoader.load_threaded_request(p, "", true)
+        var request_error := ResourceLoader.load_threaded_request(p, "", true)
+        if request_error != OK:
+            Watchdog.record("LOADER: request failed: %s error=%d" % [p, request_error])
     var shown := 0.0
     var elapsed := 0.0
     var tip_t := 99.0
@@ -92,6 +96,10 @@ static func run(menu: Control) -> void:
     while true:
         var dt := menu.get_process_delta_time()
         elapsed += dt
+        if elapsed > 90.0:
+            status.text = "CITY LOAD TIMEOUT - CHECK DIAGNOSTICS"
+            Watchdog.record("LOADER TIMEOUT after 90 seconds")
+            return
         var sum := 0.0
         var pending := false
         for p in paths:
@@ -122,18 +130,36 @@ static func run(menu: Control) -> void:
         if not pending and shown >= 0.995 and elapsed >= 4.5:
             break
         await tree.process_frame
+    Watchdog.record("LOADER: threaded requests settled after %.1f seconds" % elapsed)
+
     var keep: Array = []
     var packed: PackedScene = null
     for p in paths:
+        var load_status := ResourceLoader.load_threaded_get_status(p)
+        if load_status != ResourceLoader.THREAD_LOAD_LOADED:
+            Watchdog.record("LOADER: resource did not load: %s status=%d" % [p, load_status])
+            continue
+
         var r = ResourceLoader.load_threaded_get(p)
         if r != null:
             keep.append(r)
         if p == "res://main.tscn":
             packed = r as PackedScene
+
+    if packed == null:
+        status.text = "CITY SCENE FAILED - CHECK DIAGNOSTICS"
+        Watchdog.record("LOADER FATAL: main.tscn was not loaded")
+        return
+
+    Watchdog.record("LOADER: main scene packed successfully")
     var st_node := tree.root.get_node_or_null("Settings")
     if st_node != null:
         st_node.set_meta("keep", keep)
-    if packed != null:
-        tree.change_scene_to_packed(packed)
-    else:
-        tree.change_scene_to_file("res://main.tscn")
+    Watchdog.record("LOADER: requesting scene transition")
+    var change_error := tree.change_scene_to_packed(packed)
+    if change_error != OK:
+        status.text = "SCENE TRANSITION FAILED - CHECK DIAGNOSTICS"
+        Watchdog.record("LOADER FATAL: scene transition error=%d" % change_error)
+        return
+
+    Watchdog.record("LOADER: scene transition accepted")
