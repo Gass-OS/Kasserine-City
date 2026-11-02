@@ -25,7 +25,7 @@ func _load_log() -> void:
         return
     var old := f.get_as_text()
     f.close()
-    log_lines = old.split("\\n", false)
+    log_lines = old.replace("\\n", "\n").split("\n", false)
     while log_lines.size() > 80:
         log_lines.remove_at(0)
 
@@ -42,7 +42,7 @@ func record(event: String) -> void:
 
     var f := FileAccess.open(LOG_PATH, FileAccess.WRITE)
     if f != null:
-        f.store_string("\\n".join(log_lines) + "\\n")
+        f.store_string("\n".join(log_lines) + "\n")
         f.flush()
         f.close()
 

@@ -163,3 +163,28 @@ static func run(menu: Control) -> void:
         return
 
     Watchdog.record("LOADER: scene transition accepted")
+
+    await tree.process_frame
+    await tree.process_frame
+
+    var active_scene = tree.current_scene
+    if active_scene == null:
+        Watchdog.record("LOADER VERIFY: current scene is NULL")
+    else:
+        Watchdog.record("LOADER VERIFY: active scene=%s children=%d script=%s" % [
+            active_scene.name,
+            active_scene.get_child_count(),
+            str(active_scene.get_script())
+        ])
+
+        var player_node = active_scene.get_node_or_null("Player")
+        Watchdog.record("LOADER VERIFY: Player exists=%s" % str(player_node != null))
+
+    var active_camera = tree.root.get_viewport().get_camera_3d()
+    if active_camera == null:
+        Watchdog.record("LOADER VERIFY: NO ACTIVE 3D CAMERA")
+    else:
+        Watchdog.record("LOADER VERIFY: active camera=%s current=%s" % [
+            str(active_camera.get_path()),
+            str(active_camera.is_current())
+        ])

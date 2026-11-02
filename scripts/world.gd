@@ -6,6 +6,7 @@ const Sfx = preload("res://scripts/sfx.gd")
 const AttractionsScript = preload("res://scripts/attractions.gd")
 
 func _ready():
+    print("[KASSERINE-WORLD] world.gd _ready entered")
     Watchdog.record("WORLD: startup entered")
     _create_environment()
     Watchdog.record("WORLD: environment created")
