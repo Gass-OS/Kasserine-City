@@ -100,7 +100,6 @@ func _show_main() -> void:
 	var v := _center_box(380)
 	var title := _label("KASSERINE CITY", 56, Color(1, 0.85, 0.5))
 	v.add_child(title)
-	v.add_child(_label(Settings.t("subtitle"), 22, Color(0.85, 0.9, 1.0)))
 	v.add_child(Control.new())
 	v.add_child(_button(Settings.t("play"), _on_play))
 	v.add_child(_button("STORY / HISTORY", _show_story))
