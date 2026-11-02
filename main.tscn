@@ -20,7 +20,7 @@
 [ext_resource type="Script" path="res://scripts/intro.gd" id="18"]
 [ext_resource type="Script" path="res://scripts/urban.gd" id="19"]
 [ext_resource type="Script" path="res://scripts/streets.gd" id="20"]
-[ext_resource type="Script" path="res://scripts/audio_plus.gd" id="21"]
+[ext_resource type="Script" path="res://scripts/traffic_plus.gd" id="22"]
 [ext_resource type="Script" path="res://scripts/infill.gd" id="23"]
 [ext_resource type="Script" path="res://scripts/attractions.gd" id="24"]
 
@@ -84,8 +84,9 @@ script = ExtResource("19")
 [node name="Streets" type="Node" parent="."]
 script = ExtResource("20")
 
-[node name="AudioPlus" type="Node" parent="."]
-script = ExtResource("21")
+
+[node name="TrafficPlus" type="Node" parent="."]
+script = ExtResource("22")
 
 [node name="Infill" type="Node" parent="."]
 script = ExtResource("23")
