@@ -1,4 +1,4 @@
-[gd_scene load_steps=25 format=3]
+[gd_scene load_steps=24 format=3]
 
 [ext_resource type="Script" path="res://scripts/world.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/daynight.gd" id="2"]
@@ -23,7 +23,6 @@
 [ext_resource type="Script" path="res://scripts/audio_plus.gd" id="21"]
 [ext_resource type="Script" path="res://scripts/traffic_plus.gd" id="22"]
 [ext_resource type="Script" path="res://scripts/infill.gd" id="23"]
-[ext_resource type="Script" path="res://scripts/attractions.gd" id="24"]
 
 [node name="KasserineCity" type="Node3D"]
 script = ExtResource("1")
@@ -93,6 +92,3 @@ script = ExtResource("22")
 
 [node name="Infill" type="Node" parent="."]
 script = ExtResource("23")
-
-[node name="Attractions" type="Node" parent="."]
-script = ExtResource("24")
