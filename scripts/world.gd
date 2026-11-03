@@ -24,8 +24,8 @@ func _create_environment():
     env.background_mode = Environment.BG_SKY
     var sky = Sky.new()
     var sky_material = ProceduralSkyMaterial.new()
-    sky_material.sky_top_color = Color(0.10, 0.43, 0.82)
-    sky_material.sky_horizon_color = Color(0.82, 0.89, 0.98)
+    sky_material.sky_top_color = Color(0.08, 0.30, 0.62)
+    sky_material.sky_horizon_color = Color(0.55, 0.72, 0.88)
     sky_material.ground_bottom_color = Color(0.42, 0.31, 0.22)
     sky_material.ground_horizon_color = Color(0.78, 0.72, 0.58)
     sky_material.sun_angle_max = 24.0
@@ -33,12 +33,12 @@ func _create_environment():
     env.sky = sky
     env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
     env.ambient_light_color = Color(0.78, 0.84, 1.0)
-    env.ambient_light_energy = 1.05
+    env.ambient_light_energy = 0.65
     env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
     env.adjustment_enabled = true
-    env.adjustment_brightness = 1.03
-    env.adjustment_contrast = 1.05
-    env.adjustment_saturation = 1.16
+    env.adjustment_brightness = 0.97
+    env.adjustment_contrast = 1.08
+    env.adjustment_saturation = 1.08
     env.fog_enabled = true
     env.fog_light_color = Color(0.78, 0.85, 0.94)
     env.fog_density = 0.0008
@@ -50,7 +50,7 @@ func _create_environment():
     var sun = DirectionalLight3D.new()
     sun.rotation_degrees = Vector3(-48, -32, 0)
     sun.light_color = Color(1.0, 0.90, 0.76)
-    sun.light_energy = 1.25
+    sun.light_energy = 0.90
     sun.shadow_enabled = true
     add_child(sun)
 
@@ -82,37 +82,47 @@ func _create_city():
     _box(self, Vector3(220, 1, 220), Vector3(0, -0.55, 0), Color(0.42, 0.48, 0.31), true)
 
     var road = Color(0.14, 0.16, 0.19)
-    var line = Color(0.96, 0.83, 0.55)
-
     for i in range(-4, 5):
         var p = float(i) * 24.0
         _box(self, Vector3(8, 0.08, 210), Vector3(p, 0.02, 0), road)
         _box(self, Vector3(210, 0.08, 8), Vector3(0, 0.03, p), road)
-        for j in range(-9, 10):
-            _box(self, Vector3(0.16, 0.02, 2.5), Vector3(p, 0.075, j * 11.0), line)
-            _box(self, Vector3(2.5, 0.02, 0.16), Vector3(j * 11.0, 0.08, p), line)
 
-    # STAGE15_SIDEWALKS
-    var sidewalk_color = Color(0.58, 0.57, 0.51)
+    # STAGE15_SIDEWALKS_AND_CROSSINGS_FINAL
+    var sidewalk_color = Color(0.36, 0.34, 0.30)
+    var crossing_color = Color(0.72, 0.70, 0.62)
+
     for i in range(-4, 5):
         var p = float(i) * 24.0
-        for side in [-1.0, 1.0]:
-            _box(self, Vector3(1.4, 0.16, 210),
-                Vector3(p + side * 4.8, 0.08, 0), sidewalk_color)
-            _box(self, Vector3(210, 0.16, 1.4),
-                Vector3(0, 0.08, p + side * 4.8), sidewalk_color)
 
-    # STAGE15_ZEBRA_CROSSINGS
-    var crossing_white = Color(0.92, 0.91, 0.82)
-    for side in [-1.0, 1.0]:
-        for stripe in range(6):
-            var offset = (float(stripe) - 2.5) * 0.95
-            _box(self, Vector3(7.0, 0.035, 0.48),
-                Vector3(0, 0.105, side * 6.0 + offset),
-                crossing_white)
-            _box(self, Vector3(0.48, 0.035, 7.0),
-                Vector3(side * 6.0 + offset, 0.105, 0),
-                crossing_white)
+        for side in [-1.0, 1.0]:
+            for block in range(-4, 4):
+                var q = float(block) * 24.0 + 12.0
+
+                _box(self, Vector3(1.2, 0.12, 16.0),
+                    Vector3(p + side * 4.8, 0.09, q),
+                    sidewalk_color)
+
+                _box(self, Vector3(16.0, 0.12, 1.2),
+                    Vector3(q, 0.09, p + side * 4.8),
+                    sidewalk_color)
+
+    # Zebra crossings at every internal intersection.
+    for x in range(-4, 5):
+        for z in range(-4, 5):
+            var ix = float(x) * 24.0
+            var iz = float(z) * 24.0
+
+            for side in [-1.0, 1.0]:
+                for stripe in range(5):
+                    var offset = (float(stripe) - 2.0) * 0.95
+
+                    _box(self, Vector3(7.0, 0.025, 0.38),
+                        Vector3(ix, 0.075, iz + side * 6.0 + offset),
+                        crossing_color)
+
+                    _box(self, Vector3(0.38, 0.025, 7.0),
+                        Vector3(ix + side * 6.0 + offset, 0.075, iz),
+                        crossing_color)
 
     var rng = RandomNumberGenerator.new()
     rng.seed = 302610
