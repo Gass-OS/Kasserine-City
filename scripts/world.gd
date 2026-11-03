@@ -19,12 +19,29 @@ func _ready():
     add_child(gameplay)
 
 func _create_environment():
+    # Bright, warm arcade-art direction: clear Mediterranean sky and soft distance haze.
     var env = Environment.new()
-    env.background_mode = Environment.BG_COLOR
-    env.background_color = Color(0.48, 0.70, 0.88)
+    env.background_mode = Environment.BG_SKY
+    var sky = Sky.new()
+    var sky_material = ProceduralSkyMaterial.new()
+    sky_material.sky_top_color = Color(0.12, 0.48, 0.88)
+    sky_material.sky_horizon_color = Color(0.72, 0.86, 0.98)
+    sky_material.ground_bottom_color = Color(0.42, 0.31, 0.22)
+    sky_material.ground_horizon_color = Color(0.78, 0.72, 0.58)
+    sky_material.sun_angle_max = 24.0
+    sky.sky_material = sky_material
+    env.sky = sky
     env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-    env.ambient_light_color = Color(0.78, 0.82, 0.9)
-    env.ambient_light_energy = 0.8
+    env.ambient_light_color = Color(0.78, 0.84, 1.0)
+    env.ambient_light_energy = 0.95
+    env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+    env.adjustment_enabled = true
+    env.adjustment_brightness = 1.03
+    env.adjustment_contrast = 1.08
+    env.adjustment_saturation = 1.22
+    env.fog_enabled = true
+    env.fog_light_color = Color(0.72, 0.82, 0.91)
+    env.fog_density = 0.0012
 
     var world = WorldEnvironment.new()
     world.environment = env
@@ -32,7 +49,8 @@ func _create_environment():
 
     var sun = DirectionalLight3D.new()
     sun.rotation_degrees = Vector3(-48, -32, 0)
-    sun.light_energy = 1.2
+    sun.light_color = Color(1.0, 0.86, 0.68)
+    sun.light_energy = 1.35
     sun.shadow_enabled = true
     add_child(sun)
 
@@ -43,6 +61,9 @@ func _box(parent: Node3D, size: Vector3, pos: Vector3, color: Color, solid := fa
     mesh_instance.mesh = mesh
     var material = StandardMaterial3D.new()
     material.albedo_color = color
+    material.roughness = 0.88
+    material.metallic = 0.0
+    material.specular = 0.22
     mesh_instance.material_override = material
     mesh_instance.position = pos
     parent.add_child(mesh_instance)
@@ -60,8 +81,8 @@ func _box(parent: Node3D, size: Vector3, pos: Vector3, color: Color, solid := fa
 func _create_city():
     _box(self, Vector3(220, 1, 220), Vector3(0, -0.55, 0), Color(0.42, 0.48, 0.31), true)
 
-    var road = Color(0.16, 0.17, 0.18)
-    var line = Color(0.92, 0.83, 0.55)
+    var road = Color(0.105, 0.13, 0.18)
+    var line = Color(1.0, 0.86, 0.42)
 
     for i in range(-4, 5):
         var p = float(i) * 24.0
@@ -73,12 +94,15 @@ func _create_city():
 
     var rng = RandomNumberGenerator.new()
     rng.seed = 302610
+    # Saturated but sun-washed colours: terracotta, mint, lemon, turquoise and cream.
     var palette = [
-        Color(0.79, 0.70, 0.55),
-        Color(0.86, 0.79, 0.65),
-        Color(0.72, 0.68, 0.57),
-        Color(0.83, 0.82, 0.74),
-        Color(0.68, 0.59, 0.46)
+        Color(0.91, 0.48, 0.31),
+        Color(0.94, 0.76, 0.36),
+        Color(0.36, 0.72, 0.69),
+        Color(0.43, 0.65, 0.88),
+        Color(0.91, 0.82, 0.66),
+        Color(0.76, 0.65, 0.83),
+        Color(0.77, 0.82, 0.55)
     ]
 
     for x in range(-4, 5):
@@ -90,7 +114,11 @@ func _create_city():
             var w = rng.randf_range(7.0, 11.0)
             var d = rng.randf_range(7.0, 11.0)
             var h = rng.randf_range(4.0, 13.0)
-            _box(self, Vector3(w, h, d), Vector3(cx, h / 2.0, cz), palette[rng.randi_range(0, palette.size() - 1)], true)
+            var building_color: Color = palette[rng.randi_range(0, palette.size() - 1)]
+            _box(self, Vector3(w, h, d), Vector3(cx, h / 2.0, cz), building_color, true)
+            # Thin sunlit roof rim gives simple geometry a deliberate toy-like silhouette.
+            _box(self, Vector3(w + 0.32, 0.22, d + 0.32),
+                Vector3(cx, h + 0.11, cz), building_color.lightened(0.16))
             _add_windows(cx, cz, w, d, h)
 
     var sign = Label3D.new()
@@ -267,10 +295,22 @@ func _create_tree(pos: Vector3, scale_factor: float):
     crown.mesh = crown_mesh
     crown.position.y = 3.0
     var foliage = StandardMaterial3D.new()
-    foliage.albedo_color = Color(0.12, 0.35, 0.16)
+    foliage.albedo_color = Color(0.16, 0.48, 0.22)
     foliage.roughness = 1.0
     crown.material_override = foliage
     tree.add_child(crown)
+
+    # Three overlapping crowns make a fuller, playful low-poly canopy.
+    for offset in [Vector3(-0.72, 2.72, 0.12), Vector3(0.68, 2.82, 0.08),
+            Vector3(0.0, 3.55, -0.08)]:
+        var leaf = MeshInstance3D.new()
+        var leaf_mesh = SphereMesh.new()
+        leaf_mesh.radius = 0.82
+        leaf_mesh.height = 1.55
+        leaf.mesh = leaf_mesh
+        leaf.position = offset
+        leaf.material_override = foliage
+        tree.add_child(leaf)
 
 func _add_windows(cx: float, cz: float, w: float, d: float, h: float):
     var glass = Color(0.18, 0.34, 0.42)
@@ -336,6 +376,15 @@ func _create_car(pos: Vector3, paint: Color, angle: float) -> Node3D:
     _box(car, Vector3(1.8, 0.62, 3.2), Vector3(0, 0.65, 0), paint)
     _box(car, Vector3(1.38, 0.62, 1.55), Vector3(0, 1.15, -0.12),
         Color(0.18, 0.25, 0.29))
+    _box(car, Vector3(1.92, 0.16, 0.22), Vector3(0, 0.48, -1.58),
+        Color(0.10, 0.11, 0.14))
+    _box(car, Vector3(1.92, 0.16, 0.22), Vector3(0, 0.48, 1.58),
+        Color(0.10, 0.11, 0.14))
+    for side in [-1.0, 1.0]:
+        _box(car, Vector3(0.34, 0.20, 0.08),
+            Vector3(side * 0.58, 0.78, -1.63), Color(1.0, 0.91, 0.58))
+        _box(car, Vector3(0.30, 0.16, 0.08),
+            Vector3(side * 0.62, 0.70, 1.63), Color(0.95, 0.16, 0.10))
 
     for side in [-1.0, 1.0]:
         for end in [-1.0, 1.0]:
@@ -385,6 +434,8 @@ func _update_traffic(delta: float):
 func _create_landmark_building(title: String, pos: Vector3,
         size: Vector3, color: Color):
     _box(self, size, pos + Vector3(0, size.y * 0.5, 0), color, true)
+    _box(self, Vector3(size.x + 0.35, 0.24, size.z + 0.35),
+        pos + Vector3(0, size.y + 0.12, 0), color.lightened(0.18))
     _add_windows(pos.x, pos.z, size.x, size.z, size.y)
 
     var sign := Label3D.new()

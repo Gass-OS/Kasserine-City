@@ -6,7 +6,7 @@ const JUMP_SPEED = 4.5
 var look_sensitivity := 0.008
 
 var yaw := 0.0
-var pitch := -0.22
+var pitch := -0.27
 var move_touch := -1
 var look_touch := -1
 var jump_touch := -1
@@ -83,8 +83,9 @@ func _ready():
     add_child(camera_pivot)
 
     camera = Camera3D.new()
-    camera.position = Vector3(0, 2.4, 6.5)
+    camera.position = Vector3(0, 3.0, 7.6)
     camera.rotation.x = pitch
+    camera.fov = 75.0
     camera.current = true
     camera_pivot.add_child(camera)
 
