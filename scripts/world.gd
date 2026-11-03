@@ -3,6 +3,13 @@ extends Node3D
 const PlayerScript = preload("res://scripts/player.gd")
 const CharacterModel = preload("res://scripts/character_model.gd")
 
+# STAGE16_DYNAMIC_WEATHER
+var city_environment: Environment
+var city_sky_material: ProceduralSkyMaterial
+var city_sun: DirectionalLight3D
+var city_rain: GPUParticles3D
+
+
 func _ready():
     _create_environment()
     _create_city()
@@ -42,6 +49,8 @@ func _create_environment():
     env.fog_enabled = true
     env.fog_light_color = Color(0.78, 0.85, 0.94)
     env.fog_density = 0.0008
+    city_environment = env
+    city_sky_material = sky_material
 
     var world = WorldEnvironment.new()
     world.environment = env
@@ -53,6 +62,94 @@ func _create_environment():
     sun.light_energy = 0.90
     sun.shadow_enabled = true
     add_child(sun)
+    city_sun = sun
+
+    # Lightweight rain effect for mobile devices.
+    var rain = GPUParticles3D.new()
+    rain.name = "CityRain"
+    rain.amount = 180
+    rain.lifetime = 1.4
+    rain.emitting = false
+    rain.position = Vector3(0, 14, 0)
+    rain.visibility_aabb = AABB(
+        Vector3(-120, -25, -120),
+        Vector3(240, 55, 240)
+    )
+
+    var rain_process = ParticleProcessMaterial.new()
+    rain_process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+    rain_process.emission_box_extents = Vector3(105, 8, 105)
+    rain_process.direction = Vector3(0, -1, 0)
+    rain_process.spread = 5.0
+    rain_process.gravity = Vector3(0, -24, 0)
+    rain_process.initial_velocity_min = 10.0
+    rain_process.initial_velocity_max = 14.0
+    rain.process_material = rain_process
+
+    var rain_mesh = QuadMesh.new()
+    rain_mesh.size = Vector2(0.035, 0.55)
+    var rain_material = StandardMaterial3D.new()
+    rain_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    rain_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+    rain_material.albedo_color = Color(0.62, 0.78, 1.0, 0.48)
+    rain_mesh.material = rain_material
+    rain.draw_pass_1 = rain_mesh
+
+    add_child(rain)
+    city_rain = rain
+
+func _update_dynamic_weather():
+    if city_environment == null or city_sun == null:
+        return
+
+    # One complete day/night cycle lasts four minutes.
+    var daylight = 0.5 + 0.5 * sin(
+        city_clock * TAU / 240.0 + PI / 2.0
+    )
+    daylight = clampf(daylight, 0.0, 1.0)
+    daylight = daylight * daylight * (3.0 - 2.0 * daylight)
+
+    city_sun.rotation_degrees = Vector3(
+        lerpf(12.0, -48.0, daylight),
+        -32.0 + city_clock * 0.08,
+        0.0
+    )
+    city_sun.light_energy = lerpf(0.06, 0.90, daylight)
+    city_sun.light_color = Color(0.42, 0.52, 0.78).lerp(
+        Color(1.0, 0.90, 0.76), daylight
+    )
+
+    city_environment.ambient_light_color = Color(
+        0.16, 0.20, 0.34
+    ).lerp(Color(0.78, 0.84, 1.0), daylight)
+    city_environment.ambient_light_energy = lerpf(
+        0.22, 0.65, daylight
+    )
+
+    city_sky_material.sky_top_color = Color(
+        0.012, 0.025, 0.09
+    ).lerp(Color(0.08, 0.30, 0.62), daylight)
+    city_sky_material.sky_horizon_color = Color(
+        0.07, 0.09, 0.18
+    ).lerp(Color(0.55, 0.72, 0.88), daylight)
+
+    # Rain comes in short weather periods, not continuously.
+    var rain_phase = fposmod(city_clock, 210.0)
+    var raining = rain_phase > 135.0 and rain_phase < 175.0
+    if city_rain != null:
+        city_rain.emitting = raining
+
+    var fog_amount = lerpf(0.0007, 0.0018, 1.0 - daylight)
+    if raining:
+        fog_amount += 0.0012
+    city_environment.fog_density = fog_amount
+    city_environment.fog_light_color = Color(
+        0.20, 0.25, 0.38
+    ).lerp(Color(0.78, 0.85, 0.94), daylight)
+
+    city_environment.adjustment_brightness = lerpf(
+        0.82, 0.97, daylight
+    )
 
 func _box(parent: Node3D, size: Vector3, pos: Vector3, color: Color, solid := false):
     var mesh_instance = MeshInstance3D.new()
@@ -79,7 +176,7 @@ func _box(parent: Node3D, size: Vector3, pos: Vector3, color: Color, solid := fa
         parent.add_child(body)
 
 func _create_city():
-    _box(self, Vector3(220, 1, 220), Vector3(0, -0.55, 0), Color(0.42, 0.48, 0.31), true)
+    _box(self, Vector3(340, 1, 340), Vector3(0, -0.55, 0), Color(0.42, 0.48, 0.31), true)
 
     var road = Color(0.14, 0.16, 0.19)
     for i in range(-4, 5):
@@ -140,7 +237,12 @@ func _create_city():
     # Buildings belong in the green plots BETWEEN roads, never on road centres.
     for x in range(-4, 4):
         for z in range(-4, 4):
-            if abs(x) <= 1 and abs(z) <= 1:
+            # Preserve the central public square and all four landmark plots.
+            if (x == 0 and z == 0) or \
+                    (x == -2 and z == -2) or \
+                    (x == 1 and z == -2) or \
+                    (x == -2 and z == 1) or \
+                    (x == 1 and z == 1):
                 continue
             var cx = x * 24.0 + 12.0 + rng.randf_range(-1.5, 1.5)
             var cz = z * 24.0 + 12.0 + rng.randf_range(-1.5, 1.5)
@@ -163,6 +265,7 @@ func _create_city():
 
 
 var citizens: Array[Node3D] = []
+var citizen_anims: Array = []
 var citizen_routes: Array = []
 var citizen_route_indices: Array[int] = []
 var citizen_speeds: Array[float] = []
@@ -188,12 +291,24 @@ func _create_people():
         Vector3(-6, 0, 22)
     ]
     for i in range(places.size()):
-        var person = Node3D.new()
+        var person = CharacterBody3D.new()
         person.name = "Citizen_%02d" % i
         person.position = places[i]
+        person.collision_layer = 2
+        person.collision_mask = 1
+        person.floor_snap_length = 0.25
+
+        var collider = CollisionShape3D.new()
+        var capsule = CapsuleShape3D.new()
+        capsule.radius = 0.32
+        capsule.height = 1.8
+        collider.shape = capsule
+        collider.position.y = 0.9
+        person.add_child(collider)
+
         add_child(person)
         citizens.append(person)
-        _human(person, i)
+        citizen_anims.append(_human(person, i))
 
         # Keep Amine in place so the introductory mission remains reliable.
         var route: Array[Vector3] = []
@@ -230,17 +345,14 @@ func _create_people():
     _create_landmark_building("CAFE", Vector3(36, 0, 36),
         Vector3(8, 3.5, 8), Color(0.73, 0.48, 0.31))
 
-func _human(root: Node3D, index: int):
+func _human(root: Node3D, index: int) -> AnimationPlayer:
     var model = CharacterModel.build(index)
     if model != null:
         root.add_child(model)
-
-        # Give every citizen the same real skeleton animations as the player.
-        CharacterModel.setup_animations(model)
-        return
+        return CharacterModel.setup_animations(model)
 
     _human_fallback(root, index)
-
+    return null
 
 func _human_fallback(root: Node3D, index: int):
     var shirt_colors = [
@@ -580,36 +692,57 @@ func _create_street_lights():
                 var q := float(along) * 24.0
                 _create_street_lamp(Vector3(p + side * 5.2, 0, q + 5.2))
 
-func _update_pedestrians(delta: float):
+func _physics_process(delta: float):
     for i in range(citizens.size()):
+        var person := citizens[i] as CharacterBody3D
+        if person == null:
+            continue
+
+        if not person.is_on_floor():
+            person.velocity.y -= 18.0 * delta
+        else:
+            person.velocity.y = 0.0
+
+        var direction := Vector3.ZERO
         var route: Array = citizen_routes[i]
-        if route.size() < 2:
-            continue
 
-        if citizen_waits[i] > 0.0:
-            citizen_waits[i] = maxf(0.0, citizen_waits[i] - delta)
-            continue
+        if route.size() >= 2:
+            if citizen_waits[i] > 0.0:
+                citizen_waits[i] = maxf(0.0, citizen_waits[i] - delta)
+            else:
+                var target: Vector3 = route[citizen_route_indices[i]]
+                var difference := target - person.global_position
+                difference.y = 0.0
 
-        var person := citizens[i]
-        var target: Vector3 = route[citizen_route_indices[i]]
-        var current := person.position
-        var difference := target - current
-        difference.y = 0.0
+                if difference.length() < 0.25:
+                    citizen_route_indices[i] = (
+                        citizen_route_indices[i] + 1
+                    ) % route.size()
+                    citizen_waits[i] = 0.3 + float(i % 4) * 0.35
+                else:
+                    direction = difference.normalized()
 
-        if difference.length() < 0.18:
-            citizen_route_indices[i] = (
-                citizen_route_indices[i] + 1
-            ) % route.size()
-            citizen_waits[i] = 0.3 + float(i % 4) * 0.35
-            continue
+        person.velocity.x = direction.x * citizen_speeds[i]
+        person.velocity.z = direction.z * citizen_speeds[i]
 
-        var direction := difference.normalized()
-        person.position += direction * citizen_speeds[i] * delta
-        person.rotation.y = atan2(-direction.x, -direction.z)
+        if direction.length() > 0.01:
+            person.rotation.y = atan2(-direction.x, -direction.z)
+
+        person.move_and_slide()
+
+        var anim = citizen_anims[i] as AnimationPlayer
+        if is_instance_valid(anim) and person.is_on_floor():
+            var wanted := "run" if direction.length() > 0.01 else "idle"
+            if anim.has_animation(wanted):
+                if anim.current_animation != wanted:
+                    anim.play(wanted, 0.12)
+                anim.speed_scale = 0.65
+
+
 
 func _process(delta):
     city_clock += delta
-    _update_pedestrians(delta)
+    _update_dynamic_weather()
     _update_traffic(delta)
 
     animal_clock += delta
