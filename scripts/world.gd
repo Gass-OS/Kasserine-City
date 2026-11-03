@@ -291,19 +291,76 @@ func _box(parent: Node3D, size: Vector3, pos: Vector3, color: Color, solid := fa
 
     return mesh_instance
 
+func _add_kenney_edge_building(cx: float, cz: float,
+        rng: RandomNumberGenerator, suburban: bool):
+    var names: Array[String] = []
+    var base_path: String
+
+    if suburban:
+        base_path = "res://assets/kenney/kenney_city-kit-suburban_20/Models/GLB format/"
+        names = [
+            "building-type-a.glb", "building-type-b.glb",
+            "building-type-c.glb", "building-type-d.glb",
+            "building-type-e.glb", "building-type-f.glb",
+            "building-type-g.glb", "building-type-h.glb",
+            "building-type-i.glb", "building-type-j.glb",
+            "building-type-k.glb", "building-type-l.glb",
+            "building-type-m.glb", "building-type-n.glb",
+            "building-type-o.glb", "building-type-p.glb",
+            "building-type-q.glb", "building-type-r.glb",
+            "building-type-s.glb", "building-type-t.glb",
+            "building-type-u.glb"
+        ]
+    else:
+        base_path = "res://assets/kenney/kenney_city-kit-commercial_2.1/Models/GLB format/"
+        names = [
+            "low-detail-building-a.glb", "low-detail-building-b.glb",
+            "low-detail-building-c.glb", "low-detail-building-d.glb",
+            "low-detail-building-e.glb", "low-detail-building-f.glb",
+            "low-detail-building-g.glb", "low-detail-building-h.glb",
+            "low-detail-building-i.glb", "low-detail-building-j.glb",
+            "low-detail-building-k.glb", "low-detail-building-l.glb",
+            "low-detail-building-m.glb", "low-detail-building-n.glb",
+            "low-detail-building-wide-a.glb",
+            "low-detail-building-wide-b.glb"
+        ]
+
+    var model_path = base_path + names[rng.randi_range(0, names.size() - 1)]
+    var packed_scene = load(model_path) as PackedScene
+
+    if packed_scene == null:
+        push_warning("Stage 19: could not load " + model_path)
+        var fallback_height = rng.randf_range(6.0, 10.0)
+        var fallback_color = Color(0.82, 0.65, 0.46)
+        _box(self, Vector3(9.0, fallback_height, 9.0),
+            Vector3(cx, fallback_height * 0.5, cz), fallback_color, true)
+        return
+
+    var holder := Node3D.new()
+    holder.name = "KenneyEdgeBuilding"
+    holder.position = Vector3(cx, 0.0, cz)
+    holder.rotation.y = float(rng.randi_range(0, 3)) * PI * 0.5
+
+    var model_scale = rng.randf_range(4.2, 4.7)
+    holder.scale = Vector3.ONE * model_scale
+
+    add_child(holder)
+    holder.add_child(packed_scene.instantiate())
+
+
 func _create_city():
     _box(self, Vector3(340, 1, 340), Vector3(0, -0.55, 0), Color(0.42, 0.48, 0.31), true)
 
     var road = Color(0.14, 0.16, 0.19)
-    for i in range(-4, 5):
+    for i in range(-6, 7):
         var p = float(i) * 24.0
         var vertical_road = _box(
-            self, Vector3(8, 0.08, 210), Vector3(p, 0.02, 0), road
+            self, Vector3(8, 0.08, 306), Vector3(p, 0.02, 0), road
         )
         vertical_road.material_override = road_surface_material
 
         var horizontal_road = _box(
-            self, Vector3(210, 0.08, 8), Vector3(0, 0.03, p), road
+            self, Vector3(306, 0.08, 8), Vector3(0, 0.03, p), road
         )
         horizontal_road.material_override = road_surface_material
 
@@ -311,11 +368,11 @@ func _create_city():
     var sidewalk_color = Color(0.36, 0.34, 0.30)
     var crossing_color = Color(0.72, 0.70, 0.62)
 
-    for i in range(-4, 5):
+    for i in range(-6, 7):
         var p = float(i) * 24.0
 
         for side in [-1.0, 1.0]:
-            for block in range(-4, 4):
+            for block in range(-6, 6):
                 var q = float(block) * 24.0 + 12.0
 
                 _box(self, Vector3(1.2, 0.12, 16.0),
@@ -327,8 +384,8 @@ func _create_city():
                     sidewalk_color)
 
     # Zebra crossings at every internal intersection.
-    for x in range(-4, 5):
-        for z in range(-4, 5):
+    for x in range(-6, 7):
+        for z in range(-6, 7):
             var ix = float(x) * 24.0
             var iz = float(z) * 24.0
 
@@ -378,6 +435,20 @@ func _create_city():
             _box(self, Vector3(w + 0.32, 0.22, d + 0.32),
                 Vector3(cx, h + 0.11, cz), building_color.lightened(0.16))
             _add_windows(cx, cz, w, d, h)
+
+    # STAGE19_KENNEY_EDGE_CITY
+    # Preserve the original inner city; fill only the 80 new outer plots.
+    for x in range(-6, 6):
+        for z in range(-6, 6):
+            if x >= -4 and x <= 3 and z >= -4 and z <= 3:
+                continue
+
+            var cx = float(x) * 24.0 + 12.0
+            var cz = float(z) * 24.0 + 12.0
+
+            # The outermost ring is residential; the next ring is commercial.
+            var suburban = abs(x) >= 5 or abs(z) >= 5
+            _add_kenney_edge_building(cx, cz, rng, suburban)
 
     var sign = Label3D.new()
     sign.text = "KASSERINE CITY"
