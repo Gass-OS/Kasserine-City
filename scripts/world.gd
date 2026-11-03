@@ -9,6 +9,12 @@ var city_sky_material: ProceduralSkyMaterial
 var city_sun: DirectionalLight3D
 var city_rain: GPUParticles3D
 
+# STAGE17_NIGHT_LIGHTING
+var window_lit_material: StandardMaterial3D
+var window_dark_material: StandardMaterial3D
+var lamp_glow_material: StandardMaterial3D
+var street_lamp_lights: Array[OmniLight3D] = []
+
 
 func _ready():
     _create_environment()
@@ -63,6 +69,26 @@ func _create_environment():
     sun.shadow_enabled = true
     add_child(sun)
     city_sun = sun
+
+    # Shared warm window materials.
+    window_lit_material = StandardMaterial3D.new()
+    window_lit_material.albedo_color = Color(1.0, 0.72, 0.34)
+    window_lit_material.roughness = 0.62
+    window_lit_material.emission_enabled = true
+    window_lit_material.emission = Color(1.0, 0.48, 0.12)
+    window_lit_material.emission_energy_multiplier = 0.0
+
+    window_dark_material = StandardMaterial3D.new()
+    window_dark_material.albedo_color = Color(0.055, 0.10, 0.15)
+    window_dark_material.roughness = 0.58
+
+    # Shared amber street-lamp glow.
+    lamp_glow_material = StandardMaterial3D.new()
+    lamp_glow_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    lamp_glow_material.emission_enabled = true
+    lamp_glow_material.albedo_color = Color(1.0, 0.68, 0.30)
+    lamp_glow_material.emission = Color(1.0, 0.52, 0.18)
+    lamp_glow_material.emission_energy_multiplier = 0.0
 
     # Lightweight rain effect for mobile devices.
     var rain = GPUParticles3D.new()
@@ -119,12 +145,27 @@ func _update_dynamic_weather():
         Color(1.0, 0.90, 0.76), daylight
     )
 
+    # Keep nighttime scenery visible without turning night into daytime.
     city_environment.ambient_light_color = Color(
-        0.16, 0.20, 0.34
+        0.30, 0.34, 0.48
     ).lerp(Color(0.78, 0.84, 1.0), daylight)
     city_environment.ambient_light_energy = lerpf(
-        0.22, 0.65, daylight
+        0.40, 0.65, daylight
     )
+
+    # Smooth activation at sunset and sunrise.
+    var night_factor = clampf((0.68 - daylight) / 0.48, 0.0, 1.0)
+    night_factor = night_factor * night_factor * (3.0 - 2.0 * night_factor)
+
+    if window_lit_material != null:
+        window_lit_material.emission_energy_multiplier = 2.6 * night_factor
+
+    if lamp_glow_material != null:
+        lamp_glow_material.emission_energy_multiplier = 2.1 * night_factor
+
+    for lamp_light in street_lamp_lights:
+        if is_instance_valid(lamp_light):
+            lamp_light.light_energy = 1.65 * night_factor
 
     city_sky_material.sky_top_color = Color(
         0.012, 0.025, 0.09
@@ -148,7 +189,7 @@ func _update_dynamic_weather():
     ).lerp(Color(0.78, 0.85, 0.94), daylight)
 
     city_environment.adjustment_brightness = lerpf(
-        0.82, 0.97, daylight
+        0.92, 0.97, daylight
     )
 
 func _box(parent: Node3D, size: Vector3, pos: Vector3, color: Color, solid := false):
@@ -174,6 +215,8 @@ func _box(parent: Node3D, size: Vector3, pos: Vector3, color: Color, solid := fa
         shape.shape = box
         body.add_child(shape)
         parent.add_child(body)
+
+    return mesh_instance
 
 func _create_city():
     _box(self, Vector3(340, 1, 340), Vector3(0, -0.55, 0), Color(0.42, 0.48, 0.31), true)
@@ -538,18 +581,26 @@ func _create_bush(pos: Vector3, size: float = 1.0):
 
 
 func _add_windows(cx: float, cz: float, w: float, d: float, h: float):
-    var glass = Color(0.18, 0.34, 0.42)
     var rows = int(max(1.0, floor((h - 2.0) / 2.4)))
+
     for row in range(rows):
         var wy = 1.5 + float(row) * 2.2
+
         for side in [-1.0, 1.0]:
             for col in range(2):
+                # Stable mixed pattern: roughly three in five windows glow.
+                var pattern_seed = int(abs(cx * 7.0 + cz * 11.0)) + row * 3 + col * 5
+                var glass_material = window_lit_material if pattern_seed % 5 < 3 else window_dark_material
+
                 var wx = cx + (float(col) - 0.5) * w * 0.48
-                _box(self, Vector3(0.85, 0.9, 0.08),
-                    Vector3(wx, wy, cz + side * (d / 2.0 + 0.045)), glass)
+                var front_window = _box(self, Vector3(0.85, 0.9, 0.08),
+                    Vector3(wx, wy, cz + side * (d / 2.0 + 0.045)), Color.WHITE)
+                front_window.material_override = glass_material
+
                 var wz = cz + (float(col) - 0.5) * d * 0.48
-                _box(self, Vector3(0.08, 0.9, 0.85),
-                    Vector3(cx + side * (w / 2.0 + 0.045), wy, wz), glass)
+                var side_window = _box(self, Vector3(0.08, 0.9, 0.85),
+                    Vector3(cx + side * (w / 2.0 + 0.045), wy, wz), Color.WHITE)
+                side_window.material_override = glass_material
 
 func _create_animal(pos: Vector3, coat: Color, kind: String):
     var animal = Node3D.new()
@@ -670,7 +721,7 @@ func _create_landmark_building(title: String, pos: Vector3,
     sign.modulate = Color(1.0, 0.91, 0.62)
     add_child(sign)
 
-func _create_street_lamp(pos: Vector3):
+func _create_street_lamp(pos: Vector3, add_light: bool = false):
     var lamp := Node3D.new()
     lamp.name = "StreetLamp"
     lamp.position = pos
@@ -680,17 +731,34 @@ func _create_street_lamp(pos: Vector3):
         Vector3(0, 1.8, 0), Color(0.16, 0.17, 0.19))
     _box(lamp, Vector3(0.9, 0.14, 0.18),
         Vector3(0.35, 3.5, 0), Color(0.16, 0.17, 0.19))
-    _box(lamp, Vector3(0.45, 0.2, 0.36),
+
+    var bulb = _box(lamp, Vector3(0.45, 0.2, 0.36),
         Vector3(0.72, 3.42, 0), Color(1.0, 0.88, 0.55))
+    bulb.material_override = lamp_glow_material
+
+    # Only selected lamps get real lights to protect mobile performance.
+    if add_light:
+        var light := OmniLight3D.new()
+        light.light_color = Color(1.0, 0.72, 0.42)
+        light.light_energy = 0.0
+        light.omni_range = 10.0
+        light.shadow_enabled = false
+        light.position = Vector3(0.72, 3.25, 0)
+        lamp.add_child(light)
+        street_lamp_lights.append(light)
 
 func _create_street_lights():
     # Lamps stand just outside the 8 m roads, clear of the lane centers.
     for road_index in range(-3, 4):
         var p := float(road_index) * 24.0
+
         for side in [-1.0, 1.0]:
             for along in range(-3, 4):
                 var q := float(along) * 24.0
-                _create_street_lamp(Vector3(p + side * 5.2, 0, q + 5.2))
+                var add_light = road_index % 2 == 0 and along % 2 == 0
+                _create_street_lamp(
+                    Vector3(p + side * 5.2, 0, q + 5.2), add_light
+                )
 
 func _physics_process(delta: float):
     for i in range(citizens.size()):
