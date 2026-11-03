@@ -202,7 +202,11 @@ func _human(root: Node3D, index: int):
     var model = CharacterModel.build(index)
     if model != null:
         root.add_child(model)
+
+        # Give every citizen the same real skeleton animations as the player.
+        CharacterModel.setup_animations(model)
         return
+
     _human_fallback(root, index)
 
 
