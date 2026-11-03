@@ -321,18 +321,7 @@ func _add_native_edge_building(cx: float, cz: float, rng: RandomNumberGenerator,
 
     # Native windows and front entrance.
     _add_windows(cx, cz, w, d, h)
-
-    # Occasional balconies on the street-facing façade.
-    if not suburban and rng.randf() < 0.48:
-        var balcony_y = rng.randf_range(3.0, max(3.2, h - 1.8))
-        var balcony_z = cz + d * 0.5 + 0.48
-        _box(self, Vector3(2.0, 0.14, 0.95),
-            Vector3(cx, balcony_y, balcony_z), trim)
-        _box(self, Vector3(2.0, 0.65, 0.09),
-            Vector3(cx, balcony_y + 0.36, balcony_z + 0.43), Color(0.28, 0.30, 0.29))
-        for rail_x in [-0.92, 0.0, 0.92]:
-            _box(self, Vector3(0.07, 0.65, 0.07),
-                Vector3(cx + rail_x, balcony_y + 0.36, balcony_z + 0.43), trim)
+    _stage21_building_detail(cx, cz, w, d, h, wall, rng, suburban)
 
     # Ground-floor shopfronts on selected non-residential buildings.
     if not suburban and rng.randf() < 0.62:
@@ -350,6 +339,64 @@ func _add_native_edge_building(cx: float, cz: float, rng: RandomNumberGenerator,
         shop_label.position = Vector3(cx, 2.15, front_z + 0.57)
         shop_label.modulate = Color(1.0, 0.91, 0.72)
         add_child(shop_label)
+
+# STAGE21_COMPLETE_GRAPHICS_UPGRADE
+func _stage21_building_detail(cx: float, cz: float, w: float,
+        d: float, h: float, wall: Color,
+        rng: RandomNumberGenerator, suburban: bool = false):
+    var trim = wall.darkened(0.20)
+    var highlight = wall.lightened(0.13)
+    var front_z = cz + d * 0.5
+
+    # Vertical façade corner pilasters.
+    for side in [-1.0, 1.0]:
+        _box(self, Vector3(0.16, maxf(2.0, h - 0.45), 0.13),
+            Vector3(cx + side * (w * 0.46), h * 0.5,
+                front_z + 0.075), trim)
+
+    # Fine horizontal floor bands and a stronger roof cornice.
+    for floor_y in range(3, int(h), 3):
+        _box(self, Vector3(w + 0.10, 0.10, 0.15),
+            Vector3(cx, float(floor_y), front_z + 0.07), highlight)
+
+    _box(self, Vector3(w + 0.42, 0.16, 0.22),
+        Vector3(cx, h + 0.24, front_z + 0.06), trim)
+
+    # Occasional projecting balconies on residential façades.
+    var balcony_chance = 0.30 if not suburban else 0.10
+    if h > 6.0 and rng.randf() < balcony_chance:
+        var by = rng.randf_range(3.0, maxf(3.2, h - 1.5))
+        var bx = cx + rng.randf_range(-w * 0.22, w * 0.22)
+        var bz = front_z + 0.48
+        var rail = Color(0.24, 0.27, 0.28)
+
+        _box(self, Vector3(2.0, 0.14, 0.85),
+            Vector3(bx, by, bz), highlight)
+        _box(self, Vector3(2.0, 0.07, 0.07),
+            Vector3(bx, by + 0.65, bz + 0.38), rail)
+
+        for rx in [-0.90, -0.45, 0.0, 0.45, 0.90]:
+            _box(self, Vector3(0.055, 0.65, 0.055),
+                Vector3(bx + rx, by + 0.33, bz + 0.38), rail)
+
+    # A small rooftop water tank on selected buildings.
+    if rng.randf() < 0.20:
+        var tank = MeshInstance3D.new()
+        var tank_mesh = CylinderMesh.new()
+        tank_mesh.top_radius = 0.48
+        tank_mesh.bottom_radius = 0.52
+        tank_mesh.height = 1.05
+        tank.mesh = tank_mesh
+        tank.position = Vector3(
+            cx + rng.randf_range(-w * 0.25, w * 0.25),
+            h + 0.78,
+            cz + rng.randf_range(-d * 0.25, d * 0.25)
+        )
+        var tank_material = StandardMaterial3D.new()
+        tank_material.albedo_color = Color(0.48, 0.57, 0.62)
+        tank_material.roughness = 0.72
+        tank.material_override = tank_material
+        add_child(tank)
 
 func _create_city():
     _box(self, Vector3(340, 1, 340), Vector3(0, -0.55, 0), Color(0.42, 0.48, 0.31), true)
@@ -386,22 +433,23 @@ func _create_city():
                     Vector3(q, 0.09, p + side * 4.8),
                     sidewalk_color)
 
-    # Zebra crossings at every internal intersection.
-    for x in range(-6, 7):
-        for z in range(-6, 7):
+    # STAGE21: restrained zebra crossings at alternating intersections.
+    # No decorative white lane lines across normal road sections.
+    for x in range(-6, 7, 2):
+        for z in range(-6, 7, 2):
             var ix = float(x) * 24.0
             var iz = float(z) * 24.0
 
             for side in [-1.0, 1.0]:
-                for stripe in range(5):
-                    var offset = (float(stripe) - 2.0) * 0.95
+                for stripe in range(4):
+                    var offset = (float(stripe) - 1.5) * 0.72
 
-                    _box(self, Vector3(7.0, 0.025, 0.38),
-                        Vector3(ix, 0.075, iz + side * 6.0 + offset),
+                    _box(self, Vector3(6.0, 0.025, 0.28),
+                        Vector3(ix, 0.075, iz + side * 5.65 + offset),
                         crossing_color)
 
-                    _box(self, Vector3(0.38, 0.025, 7.0),
-                        Vector3(ix + side * 6.0 + offset, 0.075, iz),
+                    _box(self, Vector3(0.28, 0.025, 6.0),
+                        Vector3(ix + side * 5.65 + offset, 0.075, iz),
                         crossing_color)
 
     var rng = RandomNumberGenerator.new()
@@ -438,6 +486,8 @@ func _create_city():
             _box(self, Vector3(w + 0.32, 0.22, d + 0.32),
                 Vector3(cx, h + 0.11, cz), building_color.lightened(0.16))
             _add_windows(cx, cz, w, d, h)
+            _stage21_building_detail(cx, cz, w, d, h,
+                building_color, rng, false)
 
     # STAGE20_NATIVE_EDGE_BUILDINGS
     # Keep all 80 outer plots, but build them with native Godot geometry.
@@ -645,6 +695,22 @@ func _create_tree(pos: Vector3, scale_factor: float):
 
     _box(tree, Vector3(0.45, 2.4, 0.45), Vector3(0, 1.2, 0),
         Color(0.30, 0.19, 0.10))
+
+    # STAGE21: visible low-poly branches under the canopy.
+    for side in [-1.0, 1.0]:
+        var branch = MeshInstance3D.new()
+        var branch_mesh = CylinderMesh.new()
+        branch_mesh.top_radius = 0.075
+        branch_mesh.bottom_radius = 0.13
+        branch_mesh.height = 1.35
+        branch.mesh = branch_mesh
+        branch.position = Vector3(side * 0.48, 2.15, 0)
+        branch.rotation_degrees.z = side * 38.0
+        var branch_material = StandardMaterial3D.new()
+        branch_material.albedo_color = Color(0.30, 0.19, 0.10)
+        branch_material.roughness = 1.0
+        branch.material_override = branch_material
+        tree.add_child(branch)
 
     var crown = MeshInstance3D.new()
     var crown_mesh = SphereMesh.new()
@@ -859,6 +925,52 @@ func _create_car(pos: Vector3, paint: Color, angle: float) -> Node3D:
             wheel.material_override = rubber
             car.add_child(wheel)
 
+    # STAGE21: side windows and visible vehicle trim.
+    var glass = Color(0.12, 0.23, 0.29)
+    for side in [-1.0, 1.0]:
+        _box(car, Vector3(0.055, 0.31, 0.62),
+            Vector3(side * 0.704, 1.18, -0.48), glass)
+        _box(car, Vector3(0.055, 0.31, 0.62),
+            Vector3(side * 0.704, 1.18, 0.35), glass)
+
+        # Side mirrors.
+        _box(car, Vector3(0.22, 0.12, 0.16),
+            Vector3(side * 0.98, 1.02, -0.72),
+            Color(0.12, 0.14, 0.16))
+
+        # Door handles.
+        _box(car, Vector3(0.045, 0.055, 0.20),
+            Vector3(side * 0.91, 0.79, 0.10),
+            Color(0.72, 0.73, 0.70))
+
+    # Front grille and registration plate.
+    _box(car, Vector3(0.72, 0.19, 0.055),
+        Vector3(0, 0.57, -1.64), Color(0.09, 0.11, 0.12))
+    _box(car, Vector3(0.48, 0.12, 0.045),
+        Vector3(0, 0.43, -1.70), Color(0.86, 0.85, 0.76))
+
+    # Rear registration plate.
+    _box(car, Vector3(0.48, 0.12, 0.045),
+        Vector3(0, 0.43, 1.70), Color(0.86, 0.85, 0.76))
+
+    # Metallic wheel centres.
+    for side in [-1.0, 1.0]:
+        for end in [-1.0, 1.0]:
+            hub = MeshInstance3D.new()
+            var hub_mesh = CylinderMesh.new()
+            hub_mesh.top_radius = 0.145
+            hub_mesh.bottom_radius = 0.145
+            hub_mesh.height = 0.19
+            hub.mesh = hub_mesh
+            hub.rotation_degrees.z = 90
+            hub.position = Vector3(side * 1.015, 0.34, end * 1.0)
+            var hub_material = StandardMaterial3D.new()
+            hub_material.albedo_color = Color(0.56, 0.59, 0.62)
+            hub_material.metallic = 0.65
+            hub_material.roughness = 0.38
+            hub.material_override = hub_material
+            car.add_child(hub)
+
     return car
 
 func _create_traffic_car(start: Vector3, paint: Color,
@@ -895,6 +1007,11 @@ func _create_landmark_building(title: String, pos: Vector3,
     _box(self, Vector3(size.x + 0.35, 0.24, size.z + 0.35),
         pos + Vector3(0, size.y + 0.12, 0), color.lightened(0.18))
     _add_windows(pos.x, pos.z, size.x, size.z, size.y)
+
+    var landmark_rng = RandomNumberGenerator.new()
+    landmark_rng.seed = int(abs(pos.x * 17.0 + pos.z * 31.0)) + 2026
+    _stage21_building_detail(pos.x, pos.z, size.x, size.z,
+        size.y, color, landmark_rng, false)
 
     var sign := Label3D.new()
     sign.text = title
