@@ -2,7 +2,7 @@ name: Kasserine City Android APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, kc-v2]
   workflow_dispatch:
 
 permissions:
@@ -52,6 +52,21 @@ jobs:
 
       - name: Import project and validate scripts
         run: godot --headless --editor --path . --quit
+
+      - name: Diagnose character animation resources
+        shell: bash
+        run: |
+          echo "=== Imported character resources ==="
+          find .godot/imported -maxdepth 1 -type f | grep -Ei 'characterMedium|idle|run|jump' || true
+          echo "=== FBX import metadata ==="
+          for f in assets/characters/characterMedium.fbx.import assets/characters/idle.fbx.import assets/characters/run.fbx.import assets/characters/jump.fbx.import; do
+            echo "--- $f ---"
+            if [ -f "$f" ]; then
+              cat "$f"
+            else
+              echo "Import metadata missing"
+            fi
+          done
 
       - name: Diagnose Android export setup
         run: |
