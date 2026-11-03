@@ -68,6 +68,9 @@ jobs:
             fi
           done
 
+      - name: Inspect character animation clips and skeleton
+        run: godot --headless --path . --script res://scripts/ci_animation_probe.gd
+
       - name: Diagnose Android export setup
         run: |
           echo "=== Android SDK ==="
