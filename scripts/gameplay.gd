@@ -12,10 +12,7 @@ var notice_time := 0.0
 var chatter_time := 7.0
 var bubble_time := 0.0
 var speech_bubbles: Array[Label3D] = []
-var voice_enabled := true
-var stage20_city_voice_timer := 15.0
 var sensitivity_slider: HSlider
-var voice_toggle: CheckBox
 
 const TARGETS = [
     Vector3(3, 0, 7),
@@ -60,7 +57,6 @@ func _ready():
     _add_speech_bubbles()
     _update_objective()
     _notice("Welcome to Kasserine City!")
-    _speak("Welcome to Kasserine City.")
 
 func _create_interface():
     var layer = CanvasLayer.new()
@@ -129,12 +125,6 @@ func _create_interface():
     sensitivity_slider.visible = false
     column.add_child(sensitivity_slider)
 
-    voice_toggle = CheckBox.new()
-    voice_toggle.text = "NPC voice (device TTS if available)"
-    voice_toggle.button_pressed = voice_enabled
-    voice_toggle.toggled.connect(_set_voice_enabled)
-    voice_toggle.visible = false
-    column.add_child(voice_toggle)
 
     var actions = HBoxContainer.new()
     column.add_child(actions)
@@ -161,11 +151,10 @@ func _open(title: String):
     panel.visible = true
     get_tree().paused = true
     sensitivity_slider.visible = title == "SETTINGS"
-    voice_toggle.visible = title == "SETTINGS"
 
     match title:
         "MENU":
-            info.text = "GAME PAUSED\n\nChoose RESUME to continue, SETTINGS to adjust controls and voice, or EXIT to close the game."
+            info.text = "GAME PAUSED\n\nChoose RESUME to continue, SETTINGS to adjust controls, or EXIT to close the game."
         "HELP":
             info.text = "CONTROLS\n\nLeft joystick: move\nDrag the right side: look around\nRUN: sprint    JUMP: jump\nUSE: talk to a nearby citizen\n\nThe camera should now stay steady when your character turns."
         "MISSIONS":
@@ -173,7 +162,7 @@ func _open(title: String):
         "MAP":
             info.text = "DISTRICT MAP — NORTH UP\n\nMARKET (-24, 0)  ←  SQUARE  →  GARAGE (24, 0)\n\nSTART / AMINE: (3, 7)\n\nYour position: X %.1f, Z %.1f" % [player.global_position.x, player.global_position.z]
         "SETTINGS":
-            info.text = "SETTINGS\n\nCamera sensitivity\nUse the slider below. NPC voice uses the device text-to-speech service when supported; dialogue text remains available either way."
+            info.text = "SETTINGS\n\nCamera sensitivity\nUse the slider below."
 
 func _resume_game():
     panel.visible = false
@@ -186,9 +175,6 @@ func _exit_game():
 func _set_sensitivity(value: float):
     player.look_sensitivity = value
 
-func _set_voice_enabled(enabled: bool):
-    voice_enabled = enabled
-
 func _task_text() -> String:
     if mission >= TASKS.size():
         return "All introductory missions completed!"
@@ -200,14 +186,6 @@ func _update_objective():
 func _notice(message: String):
     notice.text = message
     notice_time = 4.0
-
-func _speak(message: String):
-    if not voice_enabled:
-        return
-    var voices = DisplayServer.tts_get_voices()
-    if voices.size() > 0:
-        var voice_id = str(voices[0].get("id", ""))
-        DisplayServer.tts_speak(message, voice_id, 1.0, 1.0, 1.0, 1, true)
 
 func _add_speech_bubbles():
     if not world.has_method("_create_people"):
@@ -235,19 +213,16 @@ func interact():
         mission += 1
         _update_objective()
         _notice("Amine: " + ("Aslema! Let's explore the city." if mission == 1 else "Bravo! Mission complete."))
-        _speak("Aslema! Welcome to Kasserine. Mission updated.")
         return
 
     if nearest != null and nearest_distance < 4.5:
         var line = CITIZEN_LINES[randi() % CITIZEN_LINES.size()]
         _notice("Citizen: " + line)
-        _speak(line)
         return
 
     _notice("Move closer to Amine or another citizen and press USE.")
 
 func _process(delta):
-    _stage20_update_city_voice(delta)
     if notice_time > 0.0:
         notice_time -= delta
         if notice_time <= 0.0:
@@ -277,17 +252,3 @@ func _process(delta):
         if bubble_time <= 0.0:
             for bubble in speech_bubbles:
                 bubble.visible = false
-
-
-func _stage20_update_city_voice(delta: float):
-    if not voice_enabled:
-        return
-    stage20_city_voice_timer -= delta
-    if stage20_city_voice_timer > 0.0:
-        return
-    for bubble in speech_bubbles:
-        if is_instance_valid(bubble) and bubble.visible and not bubble.text.is_empty():
-            _speak(bubble.text)
-            stage20_city_voice_timer = randf_range(18.0, 25.0)
-            return
-    stage20_city_voice_timer = 4.0
