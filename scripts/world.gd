@@ -92,6 +92,28 @@ func _create_city():
             _box(self, Vector3(0.16, 0.02, 2.5), Vector3(p, 0.075, j * 11.0), line)
             _box(self, Vector3(2.5, 0.02, 0.16), Vector3(j * 11.0, 0.08, p), line)
 
+    # STAGE15_SIDEWALKS
+    var sidewalk_color = Color(0.58, 0.57, 0.51)
+    for i in range(-4, 5):
+        var p = float(i) * 24.0
+        for side in [-1.0, 1.0]:
+            _box(self, Vector3(1.4, 0.16, 210),
+                Vector3(p + side * 4.8, 0.08, 0), sidewalk_color)
+            _box(self, Vector3(210, 0.16, 1.4),
+                Vector3(0, 0.08, p + side * 4.8), sidewalk_color)
+
+    # STAGE15_ZEBRA_CROSSINGS
+    var crossing_white = Color(0.92, 0.91, 0.82)
+    for side in [-1.0, 1.0]:
+        for stripe in range(6):
+            var offset = (float(stripe) - 2.5) * 0.95
+            _box(self, Vector3(7.0, 0.035, 0.48),
+                Vector3(0, 0.105, side * 6.0 + offset),
+                crossing_white)
+            _box(self, Vector3(0.48, 0.035, 7.0),
+                Vector3(side * 6.0 + offset, 0.105, 0),
+                crossing_white)
+
     var rng = RandomNumberGenerator.new()
     rng.seed = 302610
     # Saturated but sun-washed colours: terracotta, mint, lemon, turquoise and cream.
@@ -264,6 +286,21 @@ func _create_nature_and_vehicles():
     _create_animal(Vector3(-42, 0, -15), Color(0.75, 0.68, 0.52), "CAT")
     _create_animal(Vector3(68, 0, 68), Color(0.46, 0.28, 0.14), "DOG")
 
+    # STAGE15_PALM_PLACEMENTS
+    _create_palm_tree(Vector3(-103, 0, -55), 0.9)
+    _create_palm_tree(Vector3(103, 0, -55), 0.9)
+    _create_palm_tree(Vector3(-103, 0, 55), 0.9)
+    _create_palm_tree(Vector3(103, 0, 55), 0.9)
+
+    _create_bush(Vector3(-101, 0, -40), 0.8)
+    _create_bush(Vector3(-101, 0, -70), 0.8)
+    _create_bush(Vector3(101, 0, -40), 0.8)
+    _create_bush(Vector3(101, 0, -70), 0.8)
+    _create_bush(Vector3(-101, 0, 40), 0.8)
+    _create_bush(Vector3(-101, 0, 70), 0.8)
+    _create_bush(Vector3(101, 0, 40), 0.8)
+    _create_bush(Vector3(101, 0, 70), 0.8)
+
     _create_street_lights()
 
     # Five AI cars follow connected loops on the actual road grid.
@@ -316,6 +353,67 @@ func _create_tree(pos: Vector3, scale_factor: float):
         leaf.position = offset
         leaf.material_override = foliage
         tree.add_child(leaf)
+
+func _create_palm_tree(pos: Vector3, scale_factor: float = 1.0):
+    var palm = Node3D.new()
+    palm.name = "PalmTree"
+    palm.position = pos
+    palm.scale = Vector3.ONE * scale_factor
+    add_child(palm)
+
+    var trunk_material = StandardMaterial3D.new()
+    trunk_material.albedo_color = Color(0.43, 0.27, 0.14)
+    trunk_material.roughness = 1.0
+
+    var trunk = MeshInstance3D.new()
+    var trunk_mesh = CylinderMesh.new()
+    trunk_mesh.top_radius = 0.16
+    trunk_mesh.bottom_radius = 0.29
+    trunk_mesh.height = 5.2
+    trunk.mesh = trunk_mesh
+    trunk.position.y = 2.6
+    trunk.material_override = trunk_material
+    palm.add_child(trunk)
+
+    var leaf_material = StandardMaterial3D.new()
+    leaf_material.albedo_color = Color(0.12, 0.43, 0.19)
+    leaf_material.roughness = 1.0
+
+    for i in range(7):
+        var angle = TAU * float(i) / 7.0
+        var direction = Vector3(cos(angle), 0.0, sin(angle))
+
+        var leaf = MeshInstance3D.new()
+        var leaf_mesh = BoxMesh.new()
+        leaf_mesh.size = Vector3(0.24, 0.09, 2.5)
+        leaf.mesh = leaf_mesh
+        leaf.position = Vector3(0, 5.05, 0) + direction * 1.15
+        leaf.rotation.y = -angle
+        leaf.rotation.z = -0.38
+        leaf.material_override = leaf_material
+        palm.add_child(leaf)
+
+
+func _create_bush(pos: Vector3, size: float = 1.0):
+    var bush = Node3D.new()
+    bush.name = "Bush"
+    bush.position = pos
+    add_child(bush)
+
+    var material = StandardMaterial3D.new()
+    material.albedo_color = Color(0.19, 0.43, 0.20)
+    material.roughness = 1.0
+
+    for i in range(3):
+        var leaves = MeshInstance3D.new()
+        var mesh = SphereMesh.new()
+        mesh.radius = 0.48 * size
+        mesh.height = 0.72 * size
+        leaves.mesh = mesh
+        leaves.position = Vector3((i - 1) * 0.38 * size, 0.42 * size, 0)
+        leaves.material_override = material
+        bush.add_child(leaves)
+
 
 func _add_windows(cx: float, cz: float, w: float, d: float, h: float):
     var glass = Color(0.18, 0.34, 0.42)
