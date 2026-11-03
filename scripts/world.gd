@@ -105,12 +105,13 @@ func _create_city():
         Color(0.70, 0.82, 0.47)
     ]
 
-    for x in range(-4, 5):
-        for z in range(-4, 5):
+    # Buildings belong in the green plots BETWEEN roads, never on road centres.
+    for x in range(-4, 4):
+        for z in range(-4, 4):
             if abs(x) <= 1 and abs(z) <= 1:
                 continue
-            var cx = x * 24.0 + rng.randf_range(-4, 4)
-            var cz = z * 24.0 + rng.randf_range(-4, 4)
+            var cx = x * 24.0 + 12.0 + rng.randf_range(-1.5, 1.5)
+            var cz = z * 24.0 + 12.0 + rng.randf_range(-1.5, 1.5)
             var w = rng.randf_range(7.0, 11.0)
             var d = rng.randf_range(7.0, 11.0)
             var h = rng.randf_range(4.0, 13.0)

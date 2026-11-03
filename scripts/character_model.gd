@@ -71,7 +71,7 @@ static func setup_animations(model: Node3D) -> AnimationPlayer:
 
     var player = AnimationPlayer.new()
     player.name = "GameAnimationPlayer"
-    player.root_node = NodePath(".")
+    player.root_node = NodePath("..")
     model.add_child(player)
     player.add_animation_library("", library)
 
