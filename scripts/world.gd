@@ -32,6 +32,11 @@ func _ready():
     add_child(player)
     player.position = Vector3(0, 1, 12)
     _create_people()
+    var city_audio = Node3D.new()
+    city_audio.name = "CityAudio"
+    city_audio.set_script(preload("res://scripts/city_audio.gd"))
+    add_child(city_audio)
+
     var gameplay = Node.new()
     gameplay.name = "Gameplay"
     gameplay.set_script(preload("res://scripts/gameplay.gd"))
@@ -291,62 +296,60 @@ func _box(parent: Node3D, size: Vector3, pos: Vector3, color: Color, solid := fa
 
     return mesh_instance
 
-func _add_kenney_edge_building(cx: float, cz: float,
-        rng: RandomNumberGenerator, suburban: bool):
-    var names: Array[String] = []
-    var base_path: String
 
-    if suburban:
-        base_path = "res://assets/kenney/kenney_city-kit-suburban_20/Models/GLB format/"
-        names = [
-            "building-type-a.glb", "building-type-b.glb",
-            "building-type-c.glb", "building-type-d.glb",
-            "building-type-e.glb", "building-type-f.glb",
-            "building-type-g.glb", "building-type-h.glb",
-            "building-type-i.glb", "building-type-j.glb",
-            "building-type-k.glb", "building-type-l.glb",
-            "building-type-m.glb", "building-type-n.glb",
-            "building-type-o.glb", "building-type-p.glb",
-            "building-type-q.glb", "building-type-r.glb",
-            "building-type-s.glb", "building-type-t.glb",
-            "building-type-u.glb"
-        ]
-    else:
-        base_path = "res://assets/kenney/kenney_city-kit-commercial_2.1/Models/GLB format/"
-        names = [
-            "low-detail-building-a.glb", "low-detail-building-b.glb",
-            "low-detail-building-c.glb", "low-detail-building-d.glb",
-            "low-detail-building-e.glb", "low-detail-building-f.glb",
-            "low-detail-building-g.glb", "low-detail-building-h.glb",
-            "low-detail-building-i.glb", "low-detail-building-j.glb",
-            "low-detail-building-k.glb", "low-detail-building-l.glb",
-            "low-detail-building-m.glb", "low-detail-building-n.glb",
-            "low-detail-building-wide-a.glb",
-            "low-detail-building-wide-b.glb"
-        ]
+func _add_native_edge_building(cx: float, cz: float, rng: RandomNumberGenerator, suburban: bool):
+    var w = rng.randf_range(8.0, 10.5)
+    var d = rng.randf_range(8.0, 10.5)
+    var h = rng.randf_range(5.0, 9.0) if suburban else rng.randf_range(8.0, 14.0)
 
-    var model_path = base_path + names[rng.randi_range(0, names.size() - 1)]
-    var packed_scene = load(model_path) as PackedScene
+    var palettes = [
+        Color(0.72, 0.59, 0.43),
+        Color(0.78, 0.68, 0.54),
+        Color(0.66, 0.58, 0.48),
+        Color(0.82, 0.74, 0.62),
+        Color(0.67, 0.68, 0.62),
+        Color(0.75, 0.61, 0.49)
+    ]
+    var wall = palettes[rng.randi_range(0, palettes.size() - 1)]
+    var trim = wall.darkened(0.22)
+    var roof = wall.darkened(0.34)
 
-    if packed_scene == null:
-        push_warning("Stage 19: could not load " + model_path)
-        var fallback_height = rng.randf_range(6.0, 10.0)
-        var fallback_color = Color(0.82, 0.65, 0.46)
-        _box(self, Vector3(9.0, fallback_height, 9.0),
-            Vector3(cx, fallback_height * 0.5, cz), fallback_color, true)
-        return
+    # Main structure and roof edge.
+    _box(self, Vector3(w, h, d), Vector3(cx, h * 0.5, cz), wall, true)
+    _box(self, Vector3(w + 0.28, 0.28, d + 0.28),
+        Vector3(cx, h + 0.12, cz), roof)
 
-    var holder := Node3D.new()
-    holder.name = "KenneyEdgeBuilding"
-    holder.position = Vector3(cx, 0.0, cz)
-    holder.rotation.y = float(rng.randi_range(0, 3)) * PI * 0.5
+    # Native windows and front entrance.
+    _add_windows(cx, cz, w, d, h)
 
-    var model_scale = rng.randf_range(4.2, 4.7)
-    holder.scale = Vector3.ONE * model_scale
+    # Occasional balconies on the street-facing façade.
+    if not suburban and rng.randf() < 0.48:
+        var balcony_y = rng.randf_range(3.0, max(3.2, h - 1.8))
+        var balcony_z = cz + d * 0.5 + 0.48
+        _box(self, Vector3(2.0, 0.14, 0.95),
+            Vector3(cx, balcony_y, balcony_z), trim)
+        _box(self, Vector3(2.0, 0.65, 0.09),
+            Vector3(cx, balcony_y + 0.36, balcony_z + 0.43), Color(0.28, 0.30, 0.29))
+        for rail_x in [-0.92, 0.0, 0.92]:
+            _box(self, Vector3(0.07, 0.65, 0.07),
+                Vector3(cx + rail_x, balcony_y + 0.36, balcony_z + 0.43), trim)
 
-    add_child(holder)
-    holder.add_child(packed_scene.instantiate())
-
+    # Ground-floor shopfronts on selected non-residential buildings.
+    if not suburban and rng.randf() < 0.62:
+        var shop_color = [Color(0.12, 0.39, 0.48), Color(0.62, 0.25, 0.12),
+            Color(0.18, 0.43, 0.27), Color(0.68, 0.47, 0.16)][rng.randi_range(0, 3)]
+        var front_z = cz + d * 0.5 + 0.08
+        _box(self, Vector3(w * 0.72, 1.35, 0.12),
+            Vector3(cx, 1.25, front_z), shop_color)
+        _box(self, Vector3(w * 0.84, 0.22, 0.65),
+            Vector3(cx, 2.12, front_z + 0.22), trim)
+        var shop_label = Label3D.new()
+        shop_label.text = ["EPICERIE", "CAFE", "ALIMENTATION", "SERVICES"][rng.randi_range(0, 3)]
+        shop_label.font_size = 30
+        shop_label.pixel_size = 0.008
+        shop_label.position = Vector3(cx, 2.15, front_z + 0.57)
+        shop_label.modulate = Color(1.0, 0.91, 0.72)
+        add_child(shop_label)
 
 func _create_city():
     _box(self, Vector3(340, 1, 340), Vector3(0, -0.55, 0), Color(0.42, 0.48, 0.31), true)
@@ -436,21 +439,17 @@ func _create_city():
                 Vector3(cx, h + 0.11, cz), building_color.lightened(0.16))
             _add_windows(cx, cz, w, d, h)
 
-    # STAGE19_KENNEY_EDGE_CITY
-    # Preserve the original inner city; fill only the 80 new outer plots.
+    # STAGE20_NATIVE_EDGE_BUILDINGS
+    # Keep all 80 outer plots, but build them with native Godot geometry.
     for x in range(-6, 6):
         for z in range(-6, 6):
             if x >= -4 and x <= 3 and z >= -4 and z <= 3:
                 continue
-
             var cx = float(x) * 24.0 + 12.0
             var cz = float(z) * 24.0 + 12.0
-
-            # The outermost ring is residential; the next ring is commercial.
             var suburban = abs(x) >= 5 or abs(z) >= 5
-            _add_kenney_edge_building(cx, cz, rng, suburban)
+            _add_native_edge_building(cx, cz, rng, suburban)
 
-    var sign = Label3D.new()
     sign.text = "KASSERINE CITY"
     sign.font_size = 64
     sign.position = Vector3(0, 7, -28)

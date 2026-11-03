@@ -13,6 +13,7 @@ var chatter_time := 7.0
 var bubble_time := 0.0
 var speech_bubbles: Array[Label3D] = []
 var voice_enabled := true
+var stage20_city_voice_timer := 15.0
 var sensitivity_slider: HSlider
 var voice_toggle: CheckBox
 
@@ -34,14 +35,22 @@ const CITIZEN_LINES = [
     "Have you visited the garage today?",
     "Beautiful day in Kasserine!",
     "Drive carefully around the city.",
-    "I heard there is more to explore outside town."
+    "I heard there is more to explore outside town.",
+    "Aslema, labes? Chnowa a7welek?",
+    "Yezzi, taw nrawah. Bislema!",
+    "Bonjour, ça va? On se voit au café.",
+    "Attention! Rodd belek mel karhba!"
 ]
 const NPC_CHAT = [
     "Chnowa ahwelek?",
     "Labes, hamdoullah!",
     "The market is busy today.",
     "See you later, sahbi!",
-    "Let's meet near the square."
+    "Let's meet near the square.",
+    "Aslema, ya sahbi!",
+    "On se voit près du café.",
+    "Labes, hamdoullah. Chokran!",
+    "The traffic is busy today."
 ]
 
 func _ready():
@@ -238,6 +247,7 @@ func interact():
     _notice("Move closer to Amine or another citizen and press USE.")
 
 func _process(delta):
+    _stage20_update_city_voice(delta)
     if notice_time > 0.0:
         notice_time -= delta
         if notice_time <= 0.0:
@@ -267,3 +277,17 @@ func _process(delta):
         if bubble_time <= 0.0:
             for bubble in speech_bubbles:
                 bubble.visible = false
+
+
+func _stage20_update_city_voice(delta: float):
+    if not voice_enabled:
+        return
+    stage20_city_voice_timer -= delta
+    if stage20_city_voice_timer > 0.0:
+        return
+    for bubble in speech_bubbles:
+        if is_instance_valid(bubble) and bubble.visible and not bubble.text.is_empty():
+            _speak(bubble.text)
+            stage20_city_voice_timer = randf_range(18.0, 25.0)
+            return
+    stage20_city_voice_timer = 4.0
