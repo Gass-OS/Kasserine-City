@@ -450,6 +450,7 @@ func _create_city():
             var suburban = abs(x) >= 5 or abs(z) >= 5
             _add_native_edge_building(cx, cz, rng, suburban)
 
+    var sign := Label3D.new()
     sign.text = "KASSERINE CITY"
     sign.font_size = 64
     sign.position = Vector3(0, 7, -28)
