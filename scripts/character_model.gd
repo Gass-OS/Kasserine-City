@@ -39,3 +39,45 @@ static func _apply_skin(node: Node, texture: Texture2D) -> void:
 
     for child in node.get_children():
         _apply_skin(child, texture)
+
+
+static func setup_animations(model: Node3D) -> AnimationPlayer:
+    var library = AnimationLibrary.new()
+    var sources = [
+        ["res://assets/characters/idle.fbx", "Root|Idle", "idle", true],
+        ["res://assets/characters/run.fbx", "Root|Run", "run", true],
+        ["res://assets/characters/jump.fbx", "Root|Jump", "jump", false]
+    ]
+
+    for source in sources:
+        var packed = load(source[0]) as PackedScene
+        if packed == null:
+            push_warning("GassCharacter: Animation scene missing: " + source[0])
+            continue
+
+        var scene = packed.instantiate()
+        var source_player = scene.get_node_or_null("AnimationPlayer") as AnimationPlayer
+        if source_player != null and source_player.has_animation(source[1]):
+            var clip = source_player.get_animation(source[1]).duplicate(true) as Animation
+            clip.loop_mode = Animation.LOOP_LINEAR if source[3] else Animation.LOOP_NONE
+            library.add_animation(source[2], clip)
+        else:
+            push_warning("GassCharacter: Animation clip missing: " + source[1])
+        scene.free()
+
+    if library.get_animation_list().is_empty():
+        push_warning("GassCharacter: No usable animation clips")
+        return null
+
+    var player = AnimationPlayer.new()
+    player.name = "GameAnimationPlayer"
+    player.root_node = NodePath(".")
+    model.add_child(player)
+    player.add_animation_library("", library)
+
+    if player.has_animation("idle"):
+        player.play("idle")
+    elif player.has_animation("run"):
+        player.play("run")
+
+    return player

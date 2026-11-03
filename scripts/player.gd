@@ -21,6 +21,7 @@ var camera_pivot: Node3D
 var camera: Camera3D
 var hud: TouchHUD
 var status_label: Label
+var character_anim: AnimationPlayer
 
 class TouchHUD extends Control:
     var joystick_vector := Vector2.ZERO
@@ -65,6 +66,7 @@ func _ready():
     if character != null:
         character.name = "PlayerCharacter"
         add_child(character)
+        character_anim = character_model.setup_animations(character)
     else:
         var fallback = MeshInstance3D.new()
         var body_mesh = CapsuleMesh.new()
@@ -235,3 +237,25 @@ func _physics_process(delta):
     jump_requested = false
 
     move_and_slide()
+    _update_character_animation(direction)
+
+func _update_character_animation(direction: Vector3) -> void:
+    if not is_instance_valid(character_anim):
+        return
+
+    if not is_on_floor():
+        if character_anim.current_animation != "jump":
+            if character_anim.has_animation("jump"):
+                character_anim.play("jump", 0.08)
+        return
+
+    if direction.length() > 0.01:
+        if character_anim.has_animation("run"):
+            if character_anim.current_animation != "run":
+                character_anim.play("run", 0.12)
+            character_anim.speed_scale = 1.35 if sprint_touch != -1 else 1.0
+    else:
+        if character_anim.has_animation("idle"):
+            if character_anim.current_animation != "idle":
+                character_anim.play("idle", 0.15)
+            character_anim.speed_scale = 1.0
