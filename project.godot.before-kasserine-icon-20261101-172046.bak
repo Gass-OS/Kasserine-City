@@ -1,0 +1,26 @@
+config_version=5
+
+[application]
+boot_splash/show_image=false
+boot_splash/bg_color=Color(0, 0, 0, 1)
+config/name="Kasserine City"
+config/description="A native 3D open-world game inspired by Kasserine, Tunisia."
+run/main_scene="res://menu.tscn"
+config/features=PackedStringArray("4.4", "GL Compatibility")
+
+[display]
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+
+[rendering]
+textures/vram_compression/import_etc2_astc=true
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/default_filters/use_nearest_mipmap_filter=false
+environment/defaults/default_clear_color=Color(0.45, 0.68, 0.88, 1)
+
+[autoload]
+
+Settings="*res://scripts/settings.gd"
+Watchdog="*res://scripts/watchdog.gd"

@@ -1,0 +1,98 @@
+[gd_scene load_steps=25 format=3]
+
+[ext_resource type="Script" path="res://scripts/world.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/daynight.gd" id="2"]
+[ext_resource type="Script" path="res://scripts/night_glow.gd" id="3"]
+[ext_resource type="Script" path="res://scripts/dialogue.gd" id="4"]
+[ext_resource type="Script" path="res://scripts/anim_driver.gd" id="5"]
+[ext_resource type="Script" path="res://scripts/missions_plus.gd" id="6"]
+[ext_resource type="Script" path="res://scripts/materials_plus.gd" id="7"]
+[ext_resource type="Script" path="res://scripts/citizen_ai.gd" id="8"]
+[ext_resource type="Script" path="res://scripts/life.gd" id="9"]
+[ext_resource type="Script" path="res://scripts/hud_plus.gd" id="10"]
+[ext_resource type="Script" path="res://scripts/radio.gd" id="11"]
+[ext_resource type="Script" path="res://scripts/crime.gd" id="12"]
+[ext_resource type="Script" path="res://scripts/drive.gd" id="13"]
+[ext_resource type="Script" path="res://scripts/incidents.gd" id="14"]
+[ext_resource type="Script" path="res://scripts/weather.gd" id="15"]
+[ext_resource type="Script" path="res://scripts/physics_plus.gd" id="16"]
+[ext_resource type="Script" path="res://scripts/disputes.gd" id="17"]
+[ext_resource type="Script" path="res://scripts/intro.gd" id="18"]
+[ext_resource type="Script" path="res://scripts/urban.gd" id="19"]
+[ext_resource type="Script" path="res://scripts/streets.gd" id="20"]
+[ext_resource type="Script" path="res://scripts/audio_plus.gd" id="21"]
+[ext_resource type="Script" path="res://scripts/traffic_plus.gd" id="22"]
+[ext_resource type="Script" path="res://scripts/infill.gd" id="23"]
+[ext_resource type="Script" path="res://scripts/attractions.gd" id="24"]
+
+[node name="KasserineCity" type="Node3D"]
+script = ExtResource("1")
+
+[node name="DayNight" type="Node" parent="."]
+script = ExtResource("2")
+
+[node name="NightGlow" type="Node" parent="."]
+script = ExtResource("3")
+
+[node name="Dialogue" type="Node" parent="."]
+script = ExtResource("4")
+
+[node name="AnimDriver" type="Node" parent="."]
+script = ExtResource("5")
+
+[node name="MissionsPlus" type="Node" parent="."]
+script = ExtResource("6")
+
+[node name="MaterialsPlus" type="Node" parent="."]
+script = ExtResource("7")
+
+[node name="CitizenAI" type="Node" parent="."]
+script = ExtResource("8")
+
+[node name="Life" type="Node" parent="."]
+script = ExtResource("9")
+
+[node name="HudPlus" type="Node" parent="."]
+script = ExtResource("10")
+
+[node name="Radio" type="Node" parent="."]
+script = ExtResource("11")
+
+[node name="Crime" type="Node" parent="."]
+script = ExtResource("12")
+
+[node name="Drive" type="Node" parent="."]
+script = ExtResource("13")
+
+[node name="Incidents" type="Node" parent="."]
+script = ExtResource("14")
+
+[node name="Weather" type="Node" parent="."]
+script = ExtResource("15")
+
+[node name="PhysicsPlus" type="Node" parent="."]
+script = ExtResource("16")
+
+[node name="Disputes" type="Node" parent="."]
+script = ExtResource("17")
+
+[node name="Intro" type="Node" parent="."]
+script = ExtResource("18")
+
+[node name="Urban" type="Node" parent="."]
+script = ExtResource("19")
+
+[node name="Streets" type="Node" parent="."]
+script = ExtResource("20")
+
+[node name="AudioPlus" type="Node" parent="."]
+script = ExtResource("21")
+
+[node name="TrafficPlus" type="Node" parent="."]
+script = ExtResource("22")
+
+[node name="Infill" type="Node" parent="."]
+script = ExtResource("23")
+
+[node name="Attractions" type="Node" parent="."]
+script = ExtResource("24")
