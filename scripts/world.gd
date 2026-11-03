@@ -9,11 +9,17 @@ var city_sky_material: ProceduralSkyMaterial
 var city_sun: DirectionalLight3D
 var city_rain: GPUParticles3D
 
+# STAGE18_DOORS_SUN_MOON_WET_ROADS
 # STAGE17_NIGHT_LIGHTING
 var window_lit_material: StandardMaterial3D
 var window_dark_material: StandardMaterial3D
 var lamp_glow_material: StandardMaterial3D
 var street_lamp_lights: Array[OmniLight3D] = []
+
+# STAGE18_DOORS_SUN_MOON_WET_ROADS
+var city_sun_visual: MeshInstance3D
+var city_moon_visual: MeshInstance3D
+var road_surface_material: StandardMaterial3D
 
 
 func _ready():
@@ -70,6 +76,48 @@ func _create_environment():
     add_child(sun)
     city_sun = sun
 
+    # Visible sun in the sky.
+    var sun_visual := MeshInstance3D.new()
+    sun_visual.name = "VisibleSun"
+    var sun_mesh := SphereMesh.new()
+    sun_mesh.radius = 4.8
+    sun_mesh.height = 9.6
+    sun_visual.mesh = sun_mesh
+    var sun_material := StandardMaterial3D.new()
+    sun_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    sun_material.emission_enabled = true
+    sun_material.albedo_color = Color(1.0, 0.78, 0.40)
+    sun_material.emission = Color(1.0, 0.62, 0.24)
+    sun_material.emission_energy_multiplier = 2.4
+    sun_visual.material_override = sun_material
+    add_child(sun_visual)
+    city_sun_visual = sun_visual
+
+    # Visible moon for the night sky.
+    var moon_visual := MeshInstance3D.new()
+    moon_visual.name = "VisibleMoon"
+    var moon_mesh := SphereMesh.new()
+    moon_mesh.radius = 3.7
+    moon_mesh.height = 7.4
+    moon_visual.mesh = moon_mesh
+    var moon_material := StandardMaterial3D.new()
+    moon_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    moon_material.emission_enabled = true
+    moon_material.albedo_color = Color(0.72, 0.80, 1.0)
+    moon_material.emission = Color(0.40, 0.49, 0.72)
+    moon_material.emission_energy_multiplier = 0.8
+    moon_visual.material_override = moon_material
+    moon_visual.visible = false
+    add_child(moon_visual)
+    city_moon_visual = moon_visual
+
+    # Shared glossy-capable road material. Rain changes its roughness.
+    road_surface_material = StandardMaterial3D.new()
+    road_surface_material.albedo_color = Color(0.14, 0.16, 0.19)
+    road_surface_material.roughness = 0.92
+    road_surface_material.metallic = 0.0
+    road_surface_material.specular = 0.72
+
     # Shared warm window materials.
     window_lit_material = StandardMaterial3D.new()
     window_lit_material.albedo_color = Color(1.0, 0.72, 0.34)
@@ -91,9 +139,9 @@ func _create_environment():
     lamp_glow_material.emission_energy_multiplier = 0.0
 
     # Lightweight rain effect for mobile devices.
-    var rain = GPUParticles3D.new()
+    var rain = CPUParticles3D.new()
     rain.name = "CityRain"
-    rain.amount = 180
+    rain.amount = 300
     rain.lifetime = 1.4
     rain.emitting = false
     rain.position = Vector3(0, 14, 0)
@@ -145,6 +193,20 @@ func _update_dynamic_weather():
         Color(1.0, 0.90, 0.76), daylight
     )
 
+    # Move the visible sun and moon around the city with the day cycle.
+    var orbit_angle = PI / 2.0 - city_clock * TAU / 240.0
+    var sun_direction = Vector3(
+        cos(orbit_angle), sin(orbit_angle), -0.32
+    ).normalized()
+
+    if city_sun_visual != null:
+        city_sun_visual.position = sun_direction * 105.0
+        city_sun_visual.visible = daylight > 0.10
+
+    if city_moon_visual != null:
+        city_moon_visual.position = -sun_direction * 105.0
+        city_moon_visual.visible = daylight < 0.58
+
     # Keep nighttime scenery visible without turning night into daytime.
     city_environment.ambient_light_color = Color(
         0.30, 0.34, 0.48
@@ -174,11 +236,22 @@ func _update_dynamic_weather():
         0.07, 0.09, 0.18
     ).lerp(Color(0.55, 0.72, 0.88), daylight)
 
-    # Rain comes in short weather periods, not continuously.
-    var rain_phase = fposmod(city_clock, 210.0)
-    var raining = rain_phase > 135.0 and rain_phase < 175.0
+    # More noticeable rain periods, compatible with mobile rendering.
+    var rain_phase = fposmod(city_clock, 180.0)
+    var raining = rain_phase > 85.0 and rain_phase < 145.0
     if city_rain != null:
         city_rain.emitting = raining
+
+    # Wet asphalt becomes darker and smoother. Street lamps provide
+    # direct specular highlights on the wet road surface.
+    if road_surface_material != null:
+        var wet_factor = 1.0 if raining else 0.0
+        road_surface_material.albedo_color = Color(0.14, 0.16, 0.19).lerp(
+            Color(0.075, 0.09, 0.12), wet_factor
+        )
+        road_surface_material.roughness = lerpf(0.92, 0.18, wet_factor)
+        road_surface_material.metallic = lerpf(0.0, 0.14, wet_factor)
+        road_surface_material.specular = 0.78
 
     var fog_amount = lerpf(0.0007, 0.0018, 1.0 - daylight)
     if raining:
@@ -224,8 +297,15 @@ func _create_city():
     var road = Color(0.14, 0.16, 0.19)
     for i in range(-4, 5):
         var p = float(i) * 24.0
-        _box(self, Vector3(8, 0.08, 210), Vector3(p, 0.02, 0), road)
-        _box(self, Vector3(210, 0.08, 8), Vector3(0, 0.03, p), road)
+        var vertical_road = _box(
+            self, Vector3(8, 0.08, 210), Vector3(p, 0.02, 0), road
+        )
+        vertical_road.material_override = road_surface_material
+
+        var horizontal_road = _box(
+            self, Vector3(210, 0.08, 8), Vector3(0, 0.03, p), road
+        )
+        horizontal_road.material_override = road_surface_material
 
     # STAGE15_SIDEWALKS_AND_CROSSINGS_FINAL
     var sidewalk_color = Color(0.36, 0.34, 0.30)
@@ -601,6 +681,37 @@ func _add_windows(cx: float, cz: float, w: float, d: float, h: float):
                 var side_window = _box(self, Vector3(0.08, 0.9, 0.85),
                     Vector3(cx + side * (w / 2.0 + 0.045), wy, wz), Color.WHITE)
                 side_window.material_override = glass_material
+
+    # Every generated building and landmark receives a visible entrance.
+    _add_building_door(cx, cz, d)
+
+func _add_building_door(cx: float, cz: float, depth: float):
+    var front_z = cz + depth / 2.0
+
+    # Dark inset and contrasting frame.
+    _box(self, Vector3(1.55, 2.42, 0.07),
+        Vector3(cx, 1.21, front_z + 0.045), Color(0.10, 0.075, 0.06))
+
+    var frame_color = Color(0.88, 0.76, 0.55)
+    _box(self, Vector3(0.13, 2.42, 0.12),
+        Vector3(cx - 0.73, 1.21, front_z + 0.12), frame_color)
+    _box(self, Vector3(0.13, 2.42, 0.12),
+        Vector3(cx + 0.73, 1.21, front_z + 0.12), frame_color)
+    _box(self, Vector3(1.59, 0.14, 0.12),
+        Vector3(cx, 2.42, front_z + 0.12), frame_color)
+
+    # Wooden door leaf and two inset panels.
+    var door_color = Color(0.34, 0.17, 0.09)
+    _box(self, Vector3(1.27, 2.18, 0.09),
+        Vector3(cx, 1.13, front_z + 0.17), door_color)
+    _box(self, Vector3(0.88, 0.66, 0.035),
+        Vector3(cx, 1.62, front_z + 0.225), Color(0.47, 0.25, 0.13))
+    _box(self, Vector3(0.88, 0.48, 0.035),
+        Vector3(cx, 0.72, front_z + 0.225), Color(0.47, 0.25, 0.13))
+
+    # Small metallic handle.
+    _box(self, Vector3(0.07, 0.13, 0.055),
+        Vector3(cx + 0.43, 1.08, front_z + 0.25), Color(0.92, 0.72, 0.28))
 
 func _create_animal(pos: Vector3, coat: Color, kind: String):
     var animal = Node3D.new()
