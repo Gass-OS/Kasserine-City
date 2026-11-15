@@ -87,25 +87,32 @@ func _restart_ambience() -> void:
 
 # v0.3.1: user-supplied MP3, dual path. External file first (the user
 # drops adhan.mp3 / police.mp3 in the phone's Download folder), then
-# the copy baked into the APK. Both checks are guarded with
-# FileAccess.file_exists so a missing file never prints an error and
-# never throws — the caller simply gets null and keeps its fallback.
+# the copy baked into the APK. Both checks are guarded so a missing
+# file never prints an error and never throws — the caller simply gets
+# null and keeps its fallback.
+# v0.3.2 FIX (root cause of the on-device silence): the bundled path
+# MUST be guarded with ResourceLoader.exists(), NOT
+# FileAccess.file_exists(). On Android the raw source file is NOT in
+# the APK — only the imported .mp3str + the stripped .import remap
+# are — so FileAccess.file_exists("res://assets/audio/adhan.mp3")
+# returns false and load() was never attempted, even though the
+# resource loads fine. ResourceLoader.exists() understands import
+# remaps. Proven in the VM by deleting the raw mp3s (Android layout):
+# file_exists=false, ResourceLoader.exists=true, load()=AudioStreamMP3.
 func _load_user_mp3(fname: String) -> AudioStreamMP3:
 	var ext_path := "/storage/emulated/0/Download/" + fname
 	if FileAccess.file_exists(ext_path):
-		var s := load(ext_path) as AudioStreamMP3
-		if s == null:
-			# ResourceLoader can refuse files outside res:// — read the
-			# raw bytes as a second attempt.
-			var bytes := FileAccess.get_file_as_bytes(ext_path)
-			if bytes.size() > 0:
-				var mp3 := AudioStreamMP3.new()
-				mp3.data = bytes
-				s = mp3
-		if s != null:
-			return s
+		# NOTE: do NOT call load() on this path — ResourceLoader can
+		# only load res:// / user:// paths, so load() on an absolute
+		# outside path always fails with "No loader found" (proven in
+		# the VM probe). Read the raw bytes directly instead.
+		var bytes := FileAccess.get_file_as_bytes(ext_path)
+		if bytes.size() > 0:
+			var mp3 := AudioStreamMP3.new()
+			mp3.data = bytes
+			return mp3
 	var bundled := "res://assets/audio/" + fname
-	if FileAccess.file_exists(bundled):
+	if ResourceLoader.exists(bundled):
 		var b := load(bundled) as AudioStreamMP3
 		if b != null:
 			return b

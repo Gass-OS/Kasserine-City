@@ -213,19 +213,21 @@ func _radio_push_line() -> void:
 # city_audio.gd — /storage/emulated/0/Download/police.mp3 first, then
 # res://assets/audio/police.mp3. Guarded: a missing file returns null
 # and the caller falls back to the procedural blip, never an error.
+# v0.3.2 FIX: the bundled path MUST use ResourceLoader.exists(), not
+# FileAccess.file_exists() — on Android the raw mp3 is not in the APK
+# (only the imported .mp3str + .import remap), so the FileAccess guard
+# returned false and load() was never attempted. See city_audio.gd.
 func _load_police_stream() -> AudioStreamMP3:
     var ext_path := "/storage/emulated/0/Download/police.mp3"
     if FileAccess.file_exists(ext_path):
-        var s := load(ext_path) as AudioStreamMP3
-        if s == null:
-            var bytes := FileAccess.get_file_as_bytes(ext_path)
-            if bytes.size() > 0:
-                var mp3 := AudioStreamMP3.new()
-                mp3.data = bytes
-                s = mp3
-        if s != null:
-            return s
-    if FileAccess.file_exists("res://assets/audio/police.mp3"):
+        # NOTE: no load() here — ResourceLoader cannot load absolute
+        # paths outside res:// (always "No loader found"). Bytes only.
+        var bytes := FileAccess.get_file_as_bytes(ext_path)
+        if bytes.size() > 0:
+            var mp3 := AudioStreamMP3.new()
+            mp3.data = bytes
+            return mp3
+    if ResourceLoader.exists("res://assets/audio/police.mp3"):
         var b := load("res://assets/audio/police.mp3") as AudioStreamMP3
         if b != null:
             return b
