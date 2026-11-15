@@ -8,6 +8,10 @@ func _ready():
     _create_city()
     _tn_extras()
     _create_nature_and_vehicles()
+    _create_props()
+    _create_park()
+    _create_hospital_details()
+    _create_street_signs()
     var player = CharacterBody3D.new()
     player.set_script(PlayerScript)
     player.name = "Player"
@@ -35,6 +39,11 @@ func _create_environment():
     sun.rotation_degrees = Vector3(-48, -32, 0)
     sun.light_energy = 1.2
     sun.shadow_enabled = true
+    # Large flat boxes (walls, roads, sand) showed a speckled "shadow acne"
+    # pattern with the default bias. A slightly larger bias + normal bias
+    # keeps the shadows clean without detaching them.
+    sun.shadow_bias = 0.05
+    sun.shadow_normal_bias = 0.3
     add_child(sun)
 
 func _box(parent: Node3D, size: Vector3, pos: Vector3, color: Color, solid := false):
@@ -59,18 +68,22 @@ func _box(parent: Node3D, size: Vector3, pos: Vector3, color: Color, solid := fa
         parent.add_child(body)
 
 func _create_city():
-    _box(self, Vector3(220, 1, 220), Vector3(0, -0.55, 0), Color(0.66, 0.58, 0.4), true)
+    # Ground slab top is exactly y = 0, flush with the road tops below, so
+    # the player's feet rest on the visible surface everywhere. (It used to
+    # sit at -0.05 while the roads sat at +0.06 with no collision, so the
+    # player fell through the road visuals and the legs sank 11 cm.)
+    _box(self, Vector3(220, 1, 220), Vector3(0, -0.5, 0), Color(0.66, 0.58, 0.4), true)
 
     var road = Color(0.16, 0.17, 0.18)
     var line = Color(0.92, 0.83, 0.55)
 
     for i in range(-4, 5):
         var p = float(i) * 24.0
-        _box(self, Vector3(8, 0.08, 210), Vector3(p, 0.02, 0), road)
-        _box(self, Vector3(210, 0.08, 8), Vector3(0, 0.03, p), road)
+        _box(self, Vector3(8, 0.08, 210), Vector3(p, -0.04, 0), road, true)
+        _box(self, Vector3(210, 0.08, 8), Vector3(0, -0.04, p), road, true)
         for j in range(-9, 10):
-            _box(self, Vector3(0.16, 0.02, 2.5), Vector3(p, 0.075, j * 11.0), line)
-            _box(self, Vector3(2.5, 0.02, 0.16), Vector3(j * 11.0, 0.08, p), line)
+            _box(self, Vector3(0.16, 0.02, 2.5), Vector3(p, 0.01, j * 11.0), line)
+            _box(self, Vector3(2.5, 0.02, 0.16), Vector3(j * 11.0, 0.01, p), line)
 
     var rng = RandomNumberGenerator.new()
     rng.seed = 302610
@@ -86,6 +99,8 @@ func _create_city():
         for z in range(-4, 4):
             if x >= -2 and x <= 1 and z >= -2 and z <= 1:
                 continue
+            if x == -3 and z == 2:
+                continue  # Park block (v0.3) — built by _create_park().
             var cx = x * 24.0 + 12.0 + rng.randf_range(-1.5, 1.5)
             var cz = z * 24.0 + 12.0 + rng.randf_range(-1.5, 1.5)
             var w = rng.randf_range(6.5, 9.5)
@@ -111,6 +126,26 @@ var citizen_speeds: Array[float] = []
 var citizen_waits: Array[float] = []
 var city_clock := 0.0
 
+# ===== v0.3: night criminals, prayer, most wanted =====
+var criminal_indices: Array[int] = [16, 19, 22]
+var criminal_caught: Array[bool] = [false, false, false]
+var criminal_markers: Array[Label3D] = []
+var criminal_active := false
+var criminal_saved_speeds: Array[float] = []
+var wanted_index := 21
+var wanted_spots: Array[Vector3] = [Vector3(-24, 0, 6), Vector3(24, 0, -6), Vector3(-60, 0, 54)]
+var wanted_spot := Vector3.ZERO
+var wanted_active := false
+var wanted_arrested := false
+var prayer_times: Array[float] = [5.0 / 24.0, 12.5 / 24.0, 16.0 / 24.0, 18.5 / 24.0, 20.0 / 24.0]
+var prayer_active := false
+var prayer_timer := 0.0
+var prayer_last_index := -1
+var prayer_saved_routes: Array = []
+var prayer_saved_waits: Array[float] = []
+var prayer_group: Array[int] = [2, 3, 4, 5, 6, 7]
+var mosque_pos := Vector3(12, 0, -36)
+
 var traffic_cars: Array[Node3D] = []
 var traffic_paths: Array = []
 var traffic_targets: Array[int] = []
@@ -127,7 +162,21 @@ func _create_people():
         Vector3(20, 0, -13),
         Vector3(-19, 0, -19),
         Vector3(6, 0, -22),
-        Vector3(-6, 0, 22)
+        Vector3(-6, 0, 22),
+        Vector3(-3, 0, -7),
+        Vector3(10, 0, 14),
+        Vector3(-14, 0, -6),
+        Vector3(16, 0, 6),
+        Vector3(-8, 0, 18),
+        Vector3(20, 0, -20),
+        Vector3(30, 0, 30),
+        Vector3(-30, 0, 30),
+        Vector3(30, 0, -30),
+        Vector3(-30, 0, -30),
+        Vector3(42, 0, 42),
+        Vector3(-42, 0, 42),
+        Vector3(42, 0, -42),
+        Vector3(-42, 0, -42)
     ]
     for i in range(places.size()):
         var person = Node3D.new()
@@ -136,6 +185,19 @@ func _create_people():
         add_child(person)
         citizens.append(person)
         _human(person, i)
+
+        # Night criminals (v0.3): a red "!" appears over them after dark.
+        var ck := criminal_indices.find(i)
+        if ck >= 0:
+            var mark := Label3D.new()
+            mark.text = "!"
+            mark.font_size = 72
+            mark.position = Vector3(0, 3.0, 0)
+            mark.modulate = Color(1.0, 0.2, 0.15)
+            mark.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+            mark.visible = false
+            person.add_child(mark)
+            criminal_markers.append(mark)
 
         # Keep Amine in place so the introductory mission remains reliable.
         var route: Array[Vector3] = []
@@ -234,6 +296,8 @@ func _create_nature_and_vehicles():
     _create_animal(Vector3(42, 0, 15), Color(0.36, 0.30, 0.24), "DOG")
     _create_animal(Vector3(-42, 0, -15), Color(0.75, 0.68, 0.52), "CAT")
     _create_animal(Vector3(68, 0, 68), Color(0.46, 0.28, 0.14), "DOG")
+    _create_animal(Vector3(-54, 0, 54), Color(0.30, 0.22, 0.15), "DOG")
+    _create_animal(Vector3(54, 0, -54), Color(0.80, 0.70, 0.50), "CAT")
 
     _create_street_lights()
 
@@ -253,6 +317,23 @@ func _create_nature_and_vehicles():
     _create_traffic_car(Vector3(24, 0, 0), Color(0.12, 0.12, 0.14),
         [Vector3(24, 0, 0), Vector3(48, 0, 0),
          Vector3(48, 0, 24), Vector3(24, 0, 24)], 4.0)
+
+    # Three more cars (v0.3): 5 -> 8, all on the road grid.
+    _create_traffic_car(Vector3(48, 0, -24), Color(0.90, 0.75, 0.15),
+        [Vector3(48, 0, -24), Vector3(48, 0, 0),
+         Vector3(72, 0, 0), Vector3(72, 0, -24)], 4.1)
+    _create_traffic_car(Vector3(-48, 0, 24), Color(0.50, 0.25, 0.60),
+        [Vector3(-48, 0, 24), Vector3(-24, 0, 24),
+         Vector3(-24, 0, 48), Vector3(-48, 0, 48)], 4.3)
+    _create_traffic_car(Vector3(0, 0, 48), Color(0.90, 0.90, 0.88),
+        [Vector3(0, 0, 48), Vector3(0, 0, 72),
+         Vector3(24, 0, 72), Vector3(24, 0, 48)], 3.9)
+
+    # Parked cars beside the roads (clear of the traffic lanes).
+    _create_car(Vector3(5.4, 0, -30), Color(0.92, 0.92, 0.9), PI * 0.5)
+    _create_car(Vector3(-5.4, 0, 18), Color(0.95, 0.8, 0.15), -PI * 0.5)
+    _create_car(Vector3(30, 0, -5.4), Color(0.2, 0.5, 0.75), 0.0)
+    _create_car(Vector3(-18, 0, 5.4), Color(0.55, 0.15, 0.2), PI)
 
 func _create_tree(pos: Vector3, scale_factor: float):
     var tree = Node3D.new()
@@ -422,6 +503,34 @@ func _create_street_lights():
 
 func _update_pedestrians(delta: float):
     for i in range(citizens.size()):
+        var person := citizens[i]
+        # Night criminals (v0.3): they run from the player when he gets
+        # close, instead of following their normal patrol route.
+        if criminal_active:
+            var ck := criminal_indices.find(i)
+            if ck >= 0 and not criminal_caught[ck]:
+                var pl := get_node_or_null("Player") as Node3D
+                if pl != null:
+                    var away: Vector3 = person.position - pl.global_position
+                    away.y = 0.0
+                    if away.length() < 9.0 and away.length() > 0.01:
+                        var dir2 := away.normalized()
+                        person.position += dir2 * 3.2 * delta
+                        person.rotation.y = atan2(-dir2.x, -dir2.z)
+                        continue
+        # Prayer gathering (v0.3): walk to the mosque rows and stand there.
+        if prayer_active and prayer_group.has(i):
+            var spot: Vector3 = _prayer_spot(i)
+            var diff: Vector3 = spot - person.position
+            diff.y = 0.0
+            if diff.length() > 0.3:
+                var d2 := diff.normalized()
+                person.position += d2 * citizen_speeds[i] * delta
+                person.rotation.y = atan2(-d2.x, -d2.z)
+            else:
+                person.rotation.y = 0.0  # Face the mosque (-Z).
+            continue
+
         var route: Array = citizen_routes[i]
         if route.size() < 2:
             continue
@@ -430,7 +539,6 @@ func _update_pedestrians(delta: float):
             citizen_waits[i] = maxf(0.0, citizen_waits[i] - delta)
             continue
 
-        var person := citizens[i]
         var target: Vector3 = route[citizen_route_indices[i]]
         var current := person.position
         var difference := target - current
@@ -449,6 +557,8 @@ func _update_pedestrians(delta: float):
 
 func _process(delta):
     city_clock += delta
+    _update_night_criminals()
+    _update_prayer(delta)
     _update_pedestrians(delta)
     _update_traffic(delta)
 
@@ -632,11 +742,21 @@ func _car_box(car: Node3D, size: Vector3, pos: Vector3, mat: Material) -> MeshIn
     return _car_mesh(car, bm, pos, mat)
 
 func _create_car(pos: Vector3, paint: Color, angle: float) -> Node3D:
-    var car := Node3D.new()
+    # AnimatableBody3D: a physics body driven by code. Traffic moves it by
+    # setting its position, and the player CharacterBody3D now collides
+    # with it instead of walking straight through the car.
+    var car := AnimatableBody3D.new()
     car.name = "ParkedCar"
     car.position = pos
     car.rotation.y = angle
     add_child(car)
+
+    var car_body := CollisionShape3D.new()
+    var car_box := BoxShape3D.new()
+    car_box.size = Vector3(1.9, 1.5, 4.35)
+    car_body.shape = car_box
+    car_body.position = Vector3(0, 0.85, 0)
+    car.add_child(car_body)
 
     var body := StandardMaterial3D.new()
     body.albedo_color = paint
@@ -800,8 +920,6 @@ func _tn_building(cx: float, cz: float, w: float, d: float, h: float, style: int
     _box(self, Vector3(w, h, d), Vector3(cx, h / 2.0, cz), tone, true)
     _box(self, Vector3(w + 0.3, 0.7, d + 0.3), Vector3(cx, h + 0.35, cz), tone.darkened(0.05))
     _box(self, Vector3(w - 0.4, 0.06, d - 0.4), Vector3(cx, h + 0.72, cz), Color(0.5, 0.46, 0.42))
-    if rng.randf() < 0.45:
-        _box(self, Vector3(w + 0.16, 0.3, d + 0.16), Vector3(cx, h - 0.45, cz), Color(0.1, 0.32, 0.62))
     var roof_y := h + 0.75
     var roll := rng.randf()
     if roll < 0.25:
@@ -824,7 +942,20 @@ func _tn_building(cx: float, cz: float, w: float, d: float, h: float, style: int
         [Vector3(w * 0.5, 0, 0), PI * 0.5, d],
         [Vector3(-w * 0.5, 0, 0), -PI * 0.5, d],
     ]
-    var door_face := int(rng.randi() % 4)
+    # The door faces the plaza (city centre) instead of a random side, so
+    # entrances always open onto the public square, not into a back wall.
+    var to_center := Vector2(-cx, -cz)
+    var door_face := 0
+    if to_center.length() > 0.01:
+        to_center = to_center.normalized()
+        var face_normals: Array = [Vector2(0, 1), Vector2(0, -1), Vector2(1, 0), Vector2(-1, 0)]
+        var best_dot := -2.0
+        for fi in range(4):
+            var dn: Vector2 = face_normals[fi]
+            var dd: float = dn.dot(to_center)
+            if dd > best_dot:
+                best_dot = dd
+                door_face = fi
     var has_sign := with_sign and h >= 6.5 and rng.randf() < 0.5
     var floors := maxi(1, int((h - 1.0) / 3.2))
     var frames: Array = []
@@ -874,6 +1005,25 @@ func _tn_building(cx: float, cz: float, w: float, d: float, h: float, style: int
         var pcol: Color = pcols[rng.randi() % 3]
         _tn_boxnode(Vector3(3.4, 0.8, 0.1), _tn_mat("plq" + pcol.to_html(), pcol, 0.7), Transform3D(dbs, dbase + dbs * Vector3(dalong, 4.1, 0.08)))
         _tn_label(txt, Transform3D(dbs, dbase + dbs * Vector3(dalong, 4.1, 0.16)), 64, 0.0085, Color(1, 1, 1))
+
+    # Real balconies on the door face, one per upper floor, each aligned
+    # under a window next to the door (slab + front and side railings).
+    var bcol := (dcols >> 1) + 1
+    if bcol >= dcols:
+        bcol = (dcols >> 1) - 1
+    if bcol >= 0:
+        var balong := -dspan * 0.5 + (float(bcol) + 0.5) * (dspan / float(dcols))
+        var slab_mat: Material = _tn_mat("balc", tone.darkened(0.12), 0.9)
+        var rail_mat: Material = _tn_mat("rail", Color(0.16, 0.16, 0.19), 0.5, 0.6)
+        for r in range(1, floors):
+            var wy := 1.9 + float(r) * 3.2
+            if wy + 1.2 > h - 0.4:
+                continue
+            var sy := wy - 1.3
+            _tn_boxnode(Vector3(2.0, 0.12, 1.0), slab_mat, Transform3D(dbs, dbase + dbs * Vector3(balong, sy, 0.55)))
+            _tn_boxnode(Vector3(2.0, 0.9, 0.06), rail_mat, Transform3D(dbs, dbase + dbs * Vector3(balong, sy + 0.51, 1.02)))
+            for side in [-0.97, 0.97]:
+                _tn_boxnode(Vector3(0.06, 0.9, 1.0), rail_mat, Transform3D(dbs, dbase + dbs * Vector3(balong + side, sy + 0.51, 0.55)))
 
 func _tn_mosque(pos: Vector3) -> void:
     var white := Color(0.96, 0.95, 0.91)
@@ -944,3 +1094,289 @@ func _tn_palms() -> void:
 func _tn_extras() -> void:
     _tn_mosque(Vector3(12, 0, -36))
     _tn_palms()
+
+# ===== v0.2: street props so the city feels lived-in =====
+func _create_bench(pos: Vector3, angle: float) -> void:
+    var bench := Node3D.new()
+    bench.name = "Bench"
+    bench.position = pos
+    bench.rotation.y = angle
+    add_child(bench)
+    var wood := Color(0.45, 0.3, 0.16)
+    var iron := Color(0.12, 0.12, 0.14)
+    _box(bench, Vector3(1.8, 0.08, 0.5), Vector3(0, 0.45, 0), wood)
+    _box(bench, Vector3(1.8, 0.5, 0.08), Vector3(0, 0.75, -0.22), wood)
+    _box(bench, Vector3(0.08, 0.45, 0.45), Vector3(-0.8, 0.22, 0), iron)
+    _box(bench, Vector3(0.08, 0.45, 0.45), Vector3(0.8, 0.22, 0), iron)
+
+func _create_bin(pos: Vector3) -> void:
+    var bin := Node3D.new()
+    bin.name = "Bin"
+    bin.position = pos
+    add_child(bin)
+    var body := MeshInstance3D.new()
+    var cm := CylinderMesh.new()
+    cm.top_radius = 0.32
+    cm.bottom_radius = 0.28
+    cm.height = 0.75
+    body.mesh = cm
+    body.position.y = 0.38
+    var m := StandardMaterial3D.new()
+    m.albedo_color = Color(0.12, 0.35, 0.2)
+    body.material_override = m
+    bin.add_child(body)
+    _box(bin, Vector3(0.7, 0.06, 0.7), Vector3(0, 0.78, 0), Color(0.1, 0.1, 0.11))
+
+func _create_stall(pos: Vector3, awning: Color) -> void:
+    var stall := Node3D.new()
+    stall.name = "MarketStall"
+    stall.position = pos
+    stall.rotation.y = PI * 0.25
+    add_child(stall)
+    _box(stall, Vector3(2.4, 0.8, 1.2), Vector3(0, 0.45, 0), Color(0.35, 0.25, 0.15))
+    _box(stall, Vector3(2.4, 0.12, 1.4), Vector3(0, 0.95, 0), Color(0.5, 0.35, 0.2))
+    for sx in [-1.1, 1.1]:
+        _box(stall, Vector3(0.08, 2.2, 0.08), Vector3(sx, 1.1, -0.6), Color(0.15, 0.15, 0.16))
+        _box(stall, Vector3(0.08, 2.2, 0.08), Vector3(sx, 1.1, 0.6), Color(0.15, 0.15, 0.16))
+    _box(stall, Vector3(2.6, 0.08, 1.8), Vector3(0, 2.25, 0), awning)
+    _box(stall, Vector3(0.5, 0.25, 0.4), Vector3(-0.7, 1.15, 0), Color(0.9, 0.4, 0.1))
+    _box(stall, Vector3(0.5, 0.25, 0.4), Vector3(0.1, 1.15, 0), Color(0.85, 0.75, 0.2))
+    _box(stall, Vector3(0.5, 0.25, 0.4), Vector3(0.8, 1.15, 0), Color(0.3, 0.6, 0.2))
+
+func _create_fountain(pos: Vector3) -> void:
+    var f := Node3D.new()
+    f.name = "Fountain"
+    f.position = pos
+    add_child(f)
+    var stone := StandardMaterial3D.new()
+    stone.albedo_color = Color(0.75, 0.72, 0.65)
+    var basin := MeshInstance3D.new()
+    var bm := CylinderMesh.new()
+    bm.top_radius = 3.0
+    bm.bottom_radius = 3.2
+    bm.height = 0.7
+    basin.mesh = bm
+    basin.position.y = 0.35
+    basin.material_override = stone
+    f.add_child(basin)
+    var water := MeshInstance3D.new()
+    var wm := CylinderMesh.new()
+    wm.top_radius = 2.7
+    wm.bottom_radius = 2.7
+    wm.height = 0.08
+    water.mesh = wm
+    water.position.y = 0.62
+    var wmat := StandardMaterial3D.new()
+    wmat.albedo_color = Color(0.15, 0.45, 0.65)
+    wmat.metallic = 0.3
+    wmat.roughness = 0.15
+    water.material_override = wmat
+    f.add_child(water)
+    _box(f, Vector3(0.5, 1.1, 0.5), Vector3(0, 1.1, 0), Color(0.75, 0.72, 0.65))
+    var top := MeshInstance3D.new()
+    var sm := SphereMesh.new()
+    sm.radius = 0.32
+    sm.height = 0.64
+    top.mesh = sm
+    top.position.y = 1.85
+    top.material_override = stone
+    f.add_child(top)
+
+func _create_props() -> void:
+    # Benches around the plaza (all clear of the road strips).
+    var bench_spots: Array = [
+        [Vector3(6, 0, -6), 0.0],
+        [Vector3(-6, 0, -6), PI * 0.5],
+        [Vector3(6, 0, 18), PI],
+        [Vector3(-6, 0, 18), -PI * 0.5],
+        [Vector3(-18, 0, -6), PI * 0.5],
+        [Vector3(18, 0, 6), 0.0],
+    ]
+    for s in bench_spots:
+        _create_bench(s[0], float(s[1]))
+    # Bins beside benches and walkways.
+    for p in [Vector3(7.5, 0, -6), Vector3(-7.5, 0, 18), Vector3(-19.5, 0, -6), Vector3(19.5, 0, 6), Vector3(-18, 0, 6), Vector3(18, 0, -6), Vector3(5.5, 0, 10), Vector3(-5.5, 0, -10)]:
+        _create_bin(p)
+    # Market stalls near the MARKET sign.
+    _create_stall(Vector3(-30, 0, 6), Color(0.85, 0.3, 0.2))
+    _create_stall(Vector3(-30, 0, -6), Color(0.2, 0.5, 0.75))
+    _create_stall(Vector3(-18, 0, 8), Color(0.9, 0.7, 0.15))
+    # Fountain in the plaza, clear of roads and traffic routes.
+    _create_fountain(Vector3(-12, 0, -12))
+
+# ===== v0.3: park, hospital details, street signs =====
+func _create_park() -> void:
+    # Block (-60, 60): 16x16 lawn between the road strips, clear of traffic.
+    _box(self, Vector3(16, 0.04, 16), Vector3(-60, -0.02, 60), Color(0.25, 0.5, 0.22))
+    _box(self, Vector3(16, 0.02, 1.4), Vector3(-60, 0.01, 60), Color(0.8, 0.72, 0.55))
+    _box(self, Vector3(1.4, 0.02, 16), Vector3(-60, 0.01, 60), Color(0.8, 0.72, 0.55))
+    _create_tree(Vector3(-66, 0, 54), 1.0)
+    _create_tree(Vector3(-54, 0, 54), 1.1)
+    _create_tree(Vector3(-66, 0, 66), 0.9)
+    _create_tree(Vector3(-54, 0, 66), 1.0)
+    _create_bench(Vector3(-60, 0, 54), PI)
+    _create_bench(Vector3(-60, 0, 66), 0.0)
+    _create_fountain(Vector3(-60, 0, 60))
+    _landmark("PARK", Vector3(-60, 4, 60))
+
+func _create_hospital_details() -> void:
+    # Red-cross sign + entrance canopy on the hospital front face (-Z side,
+    # facing the plaza). Hospital landmark stands at (-36, 0, 36).
+    var white := Color(0.95, 0.95, 0.95)
+    var red := Color(0.85, 0.1, 0.12)
+    _box(self, Vector3(2.0, 2.0, 0.12), Vector3(-36, 4.2, 30.92), white)
+    _box(self, Vector3(0.55, 1.5, 0.14), Vector3(-36, 4.2, 30.9), red)
+    _box(self, Vector3(1.5, 0.55, 0.14), Vector3(-36, 4.2, 30.9), red)
+    _box(self, Vector3(3.2, 0.15, 1.4), Vector3(-36, 2.7, 30.4), Color(0.9, 0.9, 0.92))
+    _box(self, Vector3(0.12, 2.7, 0.12), Vector3(-37.4, 1.35, 29.9), Color(0.15, 0.15, 0.17))
+    _box(self, Vector3(0.12, 2.7, 0.12), Vector3(-34.6, 1.35, 29.9), Color(0.15, 0.15, 0.17))
+
+func _create_street_signs() -> void:
+    var names: Array = [
+        ["Rue de la Kasbah", Vector3(5.5, 0, 5.5)],
+        ["Av. Habib Bourguiba", Vector3(-5.5, 0, -5.5)],
+        ["Rue des Palmiers", Vector3(29.5, 0, 5.5)],
+    ]
+    for s in names:
+        var pole := Node3D.new()
+        pole.name = "StreetSign"
+        pole.position = s[1]
+        add_child(pole)
+        _box(pole, Vector3(0.12, 3.2, 0.12), Vector3(0, 1.6, 0), Color(0.15, 0.15, 0.17))
+        var l := Label3D.new()
+        l.text = String(s[0])
+        l.font_size = 32
+        l.position = Vector3(0, 3.4, 0)
+        l.modulate = Color(1, 1, 1)
+        l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+        l.outline_size = 8
+        pole.add_child(l)
+
+# ===== v0.3: criminals at night =====
+func _update_night_criminals() -> void:
+    var dn := get_node_or_null("DayNight")
+    var night := false
+    if dn != null and dn.has_method("is_night"):
+        night = dn.is_night()
+    if night == criminal_active:
+        return
+    criminal_active = night
+    if night:
+        criminal_saved_speeds.clear()
+        for k in range(criminal_indices.size()):
+            var ci: int = criminal_indices[k]
+            criminal_saved_speeds.append(citizen_speeds[ci])
+            if not criminal_caught[k]:
+                citizen_speeds[ci] = 3.0
+                if k < criminal_markers.size():
+                    criminal_markers[k].visible = true
+    else:
+        for k in range(criminal_indices.size()):
+            var ci: int = criminal_indices[k]
+            if k < criminal_saved_speeds.size():
+                citizen_speeds[ci] = criminal_saved_speeds[k]
+            if k < criminal_markers.size():
+                criminal_markers[k].visible = false
+
+func arrest_criminal(index: int) -> bool:
+    var k := criminal_indices.find(index)
+    if k < 0 or criminal_caught[k] or not criminal_active:
+        return false
+    criminal_caught[k] = true
+    citizen_routes[index] = []
+    citizen_waits[index] = 9999.0
+    citizen_speeds[index] = 0.0
+    if k < criminal_markers.size():
+        criminal_markers[k].text = "CAUGHT"
+        criminal_markers[k].modulate = Color(1.0, 0.85, 0.3)
+    return true
+
+func criminals_caught_count() -> int:
+    var n := 0
+    for c in criminal_caught:
+        if c:
+            n += 1
+    return n
+
+# ===== v0.3: mosque prayer times =====
+func _prayer_spot(i: int) -> Vector3:
+    var k := prayer_group.find(i)
+    if k < 0:
+        k = 0
+    var row := k / 3
+    var col := k % 3
+    return Vector3(9.5 + float(col) * 2.5, 0, -27.5 - float(row) * 2.0)
+
+func _update_prayer(delta: float) -> void:
+    var dn := get_node_or_null("DayNight")
+    if dn == null:
+        return
+    if prayer_active:
+        prayer_timer -= delta
+        if prayer_timer <= 0.0:
+            _end_prayer()
+        return
+    var t: float = dn.t
+    for pi in range(prayer_times.size()):
+        if pi == prayer_last_index:
+            continue
+        var pt: float = prayer_times[pi]
+        if t >= pt and t < pt + 0.004:
+            _start_prayer(pi)
+            return
+
+func _start_prayer(pi: int) -> void:
+    prayer_active = true
+    prayer_timer = 20.0
+    prayer_last_index = pi
+    prayer_saved_routes.clear()
+    prayer_saved_waits.clear()
+    for i in range(citizens.size()):
+        prayer_saved_routes.append(citizen_routes[i].duplicate())
+        prayer_saved_waits.append(citizen_waits[i])
+    var gp := get_node_or_null("Gameplay")
+    if gp != null and gp.has_method("_notice"):
+        gp._notice(Settings.t("prayer_time"))
+
+func _end_prayer() -> void:
+    prayer_active = false
+    for i in range(citizens.size()):
+        if i < prayer_saved_routes.size():
+            citizen_routes[i] = prayer_saved_routes[i]
+            citizen_waits[i] = 0.5
+    var gp := get_node_or_null("Gameplay")
+    if gp != null and gp.has_method("_notice"):
+        gp._notice(Settings.t("prayer_done"))
+
+# ===== v0.3: most wanted =====
+func start_wanted() -> void:
+    if wanted_active:
+        return
+    wanted_active = true
+    var rng := RandomNumberGenerator.new()
+    rng.seed = 90210
+    wanted_spot = wanted_spots[rng.randi() % wanted_spots.size()]
+    var c: Node3D = citizens[wanted_index]
+    c.position = wanted_spot
+    citizen_routes[wanted_index] = []
+    citizen_waits[wanted_index] = 9999.0
+    # Re-skin him as the criminal from the wanted poster.
+    var old := c.get_node_or_null("KenneyCharacter")
+    if old != null:
+        old.free()
+    var model := CharacterModel.build(0)
+    if model != null:
+        c.add_child(model)
+
+func arrest_wanted() -> void:
+    if not wanted_active or wanted_arrested:
+        return
+    wanted_arrested = true
+    var c: Node3D = citizens[wanted_index]
+    var mark := Label3D.new()
+    mark.text = "CAUGHT"
+    mark.font_size = 48
+    mark.position = Vector3(0, 3.1, 0)
+    mark.modulate = Color(1.0, 0.3, 0.2)
+    mark.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+    c.add_child(mark)

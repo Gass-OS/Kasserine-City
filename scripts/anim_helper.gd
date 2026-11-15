@@ -71,10 +71,18 @@ static func setup(model: Node3D) -> void:
         for n in src.get_animation_list():
             if String(n) == "RESET":
                 continue
+            # The FBX files also carry a 1-frame "Targeting Pose" used for
+            # retargeting. It has as many tracks as the real clip but no
+            # motion at all (0.03 s), so it must never win the pick.
+            if String(n).to_lower().contains("targeting"):
+                continue
             var a := src.get_animation(n)
-            if best == null or a.get_track_count() > best.get_track_count():
+            if best == null or a.length > best.length or (is_equal_approx(a.length, best.length) and a.get_track_count() > best.get_track_count()):
                 best = a
                 best_name = String(n)
+        if best != null and best.length < 0.1:
+            best = null
+            best_name = ""
         if best == null:
             report += "\n%s: no animations" % clip_name
             inst.free()

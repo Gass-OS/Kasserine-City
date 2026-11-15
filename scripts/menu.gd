@@ -5,6 +5,7 @@ var rng := RandomNumberGenerator.new()
 var towers: Array = []
 var tick := 0.0
 var acc := 0.0
+var screen := "main"
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -18,6 +19,15 @@ func _ready() -> void:
 	ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(ui)
 	_show_main()
+
+func _notification(what: int) -> void:
+	# Android back button: never quit at once. On the main menu it opens
+	# the quit confirmation; on settings / confirm it goes back one step.
+	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
+		if screen == "quit" or screen == "settings":
+			_show_main()
+		else:
+			_show_quit_confirm()
 
 func _process(delta: float) -> void:
 	tick += delta
@@ -95,6 +105,7 @@ func _button(text: String, cb: Callable) -> Button:
 	return b
 
 func _show_main() -> void:
+	screen = "main"
 	_clear()
 	var v := _center_box(380)
 	var title := _label("KASSERINE CITY", 56, Color(1, 0.85, 0.5))
@@ -103,9 +114,19 @@ func _show_main() -> void:
 	v.add_child(Control.new())
 	v.add_child(_button(Settings.t("play"), _on_play))
 	v.add_child(_button(Settings.t("settings"), _show_settings))
-	v.add_child(_button(Settings.t("quit"), func(): get_tree().quit()))
+	v.add_child(_button(Settings.t("quit"), _show_quit_confirm))
 	v.modulate.a = 0.0
 	create_tween().tween_property(v, "modulate:a", 1.0, 0.8)
+
+func _show_quit_confirm() -> void:
+	screen = "quit"
+	_clear()
+	var v := _center_box(420)
+	v.add_child(_label(Settings.t("quit_confirm"), 36, Color(1, 0.85, 0.5)))
+	v.add_child(_label("Kasserine City", 22, Color(0.85, 0.9, 1.0)))
+	v.add_child(Control.new())
+	v.add_child(_button(Settings.t("yes_quit"), func(): get_tree().quit()))
+	v.add_child(_button(Settings.t("back"), _show_main))
 
 func _on_play() -> void:
 	get_tree().change_scene_to_file("res://main.tscn")
@@ -122,6 +143,7 @@ func _row(parent: Control, key: String, slider_min: float, slider_max: float, st
 	parent.add_child(s)
 
 func _show_settings() -> void:
+	screen = "settings"
 	_clear()
 	var v := _center_box(460)
 	v.add_child(_label(Settings.t("settings"), 40, Color(1, 0.85, 0.5)))

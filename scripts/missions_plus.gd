@@ -5,6 +5,9 @@ const STEPS = [
     {"text": "Check the Police station", "pos": Vector3(36, 0, -36), "night": false},
     {"text": "Visit the Hospital", "pos": Vector3(-36, 0, 36), "night": false},
     {"text": "Meet at the Cafe after dark", "pos": Vector3(36, 0, 36), "night": true},
+    {"text": "Patrol the new Park", "pos": Vector3(-60, 0, 60), "night": false},
+    {"text": "Deliver a parcel to the Police station", "pos": Vector3(36, 0, -36), "night": false},
+    {"text": "MOST WANTED: find the fugitive", "pos": Vector3(0, 0, 0), "night": false, "wanted": true},
 ]
 
 var world: Node
@@ -46,13 +49,28 @@ func _ready() -> void:
     layer.layer = 20
     add_child(layer)
     coin_label = Label.new()
-    coin_label.add_theme_font_size_override("font_size", 22)
+    coin_label.add_theme_font_size_override("font_size", 26)
     coin_label.add_theme_constant_override("outline_size", 6)
     coin_label.add_theme_color_override("font_outline_color", Color.BLACK)
     coin_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
-    coin_label.position = Vector2(get_viewport().get_visible_rect().size.x - 190.0, 100.0)
+    coin_label.position = Vector2(get_viewport().get_visible_rect().size.x - 230.0, 108.0)
     coin_label.visible = false
     layer.add_child(coin_label)
+
+func wanted_step_active() -> bool:
+    return started and not done and step < STEPS.size() and bool(STEPS[step].get("wanted", false))
+
+func complete_wanted() -> void:
+    if not wanted_step_active():
+        return
+    coins += 500
+    coin_label.text = "Dinars: %d" % coins
+    step += 1
+    if step >= STEPS.size():
+        done = true
+        marker.visible = false
+        gp.objective.text = "ALL MISSIONS COMPLETED - explore freely!"
+        gp._notice("All missions complete! Total: %d dinars" % coins)
 
 func _process(delta: float) -> void:
     if gp == null or player == null or done or marker == null:
@@ -65,7 +83,14 @@ func _process(delta: float) -> void:
         coin_label.visible = true
         coin_label.text = "Dinars: 0"
     var s: Dictionary = STEPS[step]
+    var is_wanted: bool = bool(s.get("wanted", false))
     var target: Vector3 = s["pos"]
+    if is_wanted:
+        # The fugitive hides at one of three spots; the marker follows him,
+        # but only USE arrests him (see gameplay.interact).
+        if not world.wanted_active:
+            world.start_wanted()
+        target = world.wanted_spot
     marker.visible = true
     marker.global_position = target + Vector3(0, 20, 0)
     var dx: float = player.global_position.x - target.x
@@ -75,10 +100,17 @@ func _process(delta: float) -> void:
     acc += delta
     if acc > 0.25:
         acc = 0.0
-        if night_ok:
+        if is_wanted:
+            if dist < 8.0:
+                gp.objective.text = "OBJECTIVE: MOST WANTED — " + Settings.t("wanted_hint")
+            else:
+                gp.objective.text = "OBJECTIVE: %s (%d m)" % [s["text"], int(dist)]
+        elif night_ok:
             gp.objective.text = "OBJECTIVE: %s (%d m)" % [s["text"], int(dist)]
         else:
             gp.objective.text = "OBJECTIVE: Wait for night, then go to the Cafe (%d m)" % int(dist)
+    if is_wanted:
+        return
     if dist < 7.0 and night_ok:
         coins += 100
         coin_label.text = "Dinars: %d" % coins

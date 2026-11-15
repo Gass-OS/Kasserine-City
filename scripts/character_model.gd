@@ -25,6 +25,10 @@ static func build(skin_index: int) -> Node3D:
 
     model.name = "KenneyCharacter"
     model.scale = Vector3.ONE * 0.45
+    # The Kenney FBX rig faces +Z in model space, but the body yaw math
+    # (player.gd / citizen walking) points -Z at the movement direction.
+    # Without this the character walks forward while facing backwards.
+    model.rotation.y = PI
     preload("res://scripts/anim_helper.gd").setup(model)
     return model
 

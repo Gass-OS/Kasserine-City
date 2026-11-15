@@ -48,10 +48,10 @@ func _setup() -> void:
 	var layer := CanvasLayer.new()
 	add_child(layer)
 	clock = Label.new()
-	clock.add_theme_font_size_override("font_size", 28)
+	clock.add_theme_font_size_override("font_size", 34)
 	clock.add_theme_constant_override("outline_size", 6)
 	clock.add_theme_color_override("font_outline_color", Color.BLACK)
-	clock.position = Vector2(get_viewport().get_visible_rect().size.x - 130.0, 64.0)
+	clock.position = Vector2(get_viewport().get_visible_rect().size.x - 170.0, 70.0)
 	layer.add_child(clock)
 	_fx_setup()
 
