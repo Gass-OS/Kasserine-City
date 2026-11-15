@@ -40,6 +40,11 @@ var score := 0
 # v0.4 (H): radio power toggle — ON (default) chatters, OFF is silent.
 var radio_on := true
 var radio_button: Button
+# v0.4.1: police.mp3 is 44.88 s long and v0.4 played the WHOLE file per
+# chatter line, every 20-40 s — the radio was nearly continuous. Each
+# chatter now plays only a short burst, auto-stopped by this timer.
+const RADIO_BURST_SECONDS := 5.5
+var radio_burst_left := 0.0
 # v0.4 (C): story chapter cards (new officer's first week).
 var story_panel: PanelContainer
 var story_title: Label
@@ -313,6 +318,8 @@ func _load_police_stream() -> AudioStreamMP3:
 # v0.3.1: the radio sound. police.mp3 when present (once per call,
 # restarting if still playing); otherwise the procedural two-tone blip
 # (0.07 s at 1250 Hz, then 0.07 s at 950 Hz).
+# v0.4.1: the mp3 plays as a SHORT BURST (RADIO_BURST_SECONDS) — the
+# file is 45 s long and v0.4 played it whole per chatter line.
 func _play_radio_sound() -> void:
     if police_stream == null:
         police_stream = _load_police_stream()
@@ -321,6 +328,7 @@ func _play_radio_sound() -> void:
             radio_sound_player.stop()
         radio_sound_player.stream = police_stream
         radio_sound_player.play()
+        radio_burst_left = RADIO_BURST_SECONDS
         return
     if blip_playback != null:
         blip_frames_left = int(0.14 * 22050)
@@ -344,6 +352,15 @@ func _toggle_radio() -> void:
             _play_radio_sound()
         _notice(Settings.t("radio_started"))
     else:
+        # v0.4.1 FIX: OFF used to hide the panel only — a playing
+        # police.mp3 (45 s!) kept running to the end, and the blip
+        # kept going too. OFF now stops all radio sound immediately.
+        radio_burst_left = 0.0
+        if radio_sound_player != null and radio_sound_player.playing:
+            radio_sound_player.stop()
+        blip_frames_left = 0
+        if blip_player != null and blip_player.playing:
+            blip_player.stop()
         _notice(Settings.t("radio_stopped"))
 
 func _create_interface():
@@ -608,6 +625,12 @@ func _process(delta):
         if radio_timer <= 0.0:
             radio_timer = randf_range(20.0, 40.0)
             _radio_push_line()
+    # v0.4.1: stop the mp3 burst after RADIO_BURST_SECONDS — the file
+    # is 45 s and must never play through on a single chatter line.
+    if radio_burst_left > 0.0:
+        radio_burst_left -= delta
+        if radio_burst_left <= 0.0 and radio_sound_player != null and radio_sound_player.playing:
+            radio_sound_player.stop()
     # Push the two-tone blip frames (1250 Hz, then 950 Hz).
     if blip_frames_left > 0 and blip_playback != null:
         var avail := blip_playback.get_frames_available()

@@ -809,9 +809,12 @@ func _glass_mat() -> StandardMaterial3D:
     if _glow_cache.has(key):
         return _glow_cache[key]
     var m := StandardMaterial3D.new()
-    m.albedo_color = Color(0.13, 0.2, 0.28)
-    m.metallic = 0.6
-    m.roughness = 0.15
+    # v0.4.1: was metallic 0.6 / roughness 0.15 — with the sky as the
+    # reflection source every window was a little mirror blowing out
+    # white in the sun. Dark, rough, almost no metal now.
+    m.albedo_color = Color(0.08, 0.12, 0.18)
+    m.metallic = 0.1
+    m.roughness = 0.5
     _glow_cache[key] = m
     return m
 
@@ -849,7 +852,7 @@ func _add_windows(cx: float, cz: float, w: float, d: float, h: float):
     var rng := RandomNumberGenerator.new()
     rng.seed = int(absf(cx) * 73.0 + absf(cz) * 131.0 + h * 17.0) + 11
     var floors := int((h - 2.0) / 3.2)
-    var tone := Color.from_hsv(rng.randf_range(0.04, 0.12), rng.randf_range(0.03, 0.14), rng.randf_range(0.68, 0.88))
+    var tone := Color.from_hsv(rng.randf_range(0.04, 0.12), rng.randf_range(0.03, 0.14), rng.randf_range(0.55, 0.7))
     if floors >= 1:
         var lit_xf: Array = []
         var dark_xf: Array = []
@@ -936,7 +939,14 @@ func _car_box(car: Node3D, size: Vector3, pos: Vector3, mat: Material) -> MeshIn
 # toward -Z). Ground offsets measured headless: the wheel bottoms sit
 # 0.6 m (suv: 1.0 m) below the model origin, times the 1.45 scale.
 const CAR_MODELS := ["res://assets/cars/sedan.glb", "res://assets/cars/taxi.glb", "res://assets/cars/police.glb", "res://assets/cars/suv.glb"]
-const CAR_MODEL_Y := [0.87, 0.87, 0.87, 1.45]
+# v0.4.1 FIX (flying cars): the Kenney GLB origins sit AT ground level
+# — measured headless at 1.45 scale, the wheel bottoms of all 4 models
+# are at exactly y = 0.000 (body bottom 0.22-0.29). The v0.4 offsets
+# 0.87 / 1.45 assumed the origin was above the wheels, so every car
+# floated 0.87 m (suv 1.45 m) in the air. Correct offset is 0.0: the
+# traffic code already puts the car root on the road top (0.02/0.04)
+# and parked cars sit on the ground at y = 0.
+const CAR_MODEL_Y := [0.0, 0.0, 0.0, 0.0]
 const CAR_MODEL_SCALE := 1.45
 
 func _create_car(pos: Vector3, paint: Color, angle: float, model_idx: int = -1) -> Node3D:
@@ -1133,7 +1143,10 @@ func _tn_dome(pos: Vector3, rad: float, mat: Material) -> void:
     _tn_node(dm, mat, Transform3D(Basis.IDENTITY, pos))
 
 func _tn_building(cx: float, cz: float, w: float, d: float, h: float, style: int, with_sign := true) -> void:
-    var tones: Array = [Color(0.95, 0.94, 0.9), Color(0.9, 0.85, 0.74), Color(0.86, 0.76, 0.6), Color(0.93, 0.9, 0.82), Color(0.82, 0.7, 0.52)]
+    # v0.4.1: wall tones darkened x0.72 — the old near-white albedos
+    # (0.95/0.93) under sun 1.3 + ambient 1.0 + sky reflection blew out
+    # to blinding white on the phone. Warm sand now, still Kasserine.
+    var tones: Array = [Color(0.68, 0.67, 0.64), Color(0.65, 0.61, 0.53), Color(0.62, 0.55, 0.43), Color(0.67, 0.65, 0.59), Color(0.59, 0.5, 0.37)]
     var tone: Color = tones[posmod(style, tones.size())]
     var rng := RandomNumberGenerator.new()
     rng.seed = int(absf(cx) * 71.0 + absf(cz) * 113.0 + h * 13.0) + style * 7 + 5
@@ -1151,7 +1164,7 @@ func _tn_building(cx: float, cz: float, w: float, d: float, h: float, style: int
     elif roll < 0.45:
         _box(self, Vector3(2.2, 2.2, 2.2), Vector3(cx - w * 0.2, roof_y + 1.1, cz + d * 0.15), tone)
     elif roll < 0.62:
-        var dmat: Material = _tn_mat("dome_w", Color(0.96, 0.96, 0.94), 0.5)
+        var dmat: Material = _tn_mat("dome_w", Color(0.69, 0.69, 0.68), 0.5)
         if rng.randf() < 0.4:
             dmat = _tn_mat("dome_b", Color(0.12, 0.38, 0.66), 0.4, 0.2)
         _tn_dome(Vector3(cx, roof_y, cz), minf(w, d) * 0.26, dmat)
@@ -1246,7 +1259,7 @@ func _tn_building(cx: float, cz: float, w: float, d: float, h: float, style: int
                 _tn_boxnode(Vector3(0.06, 0.9, 1.0), rail_mat, Transform3D(dbs, dbase + dbs * Vector3(balong + side, sy + 0.51, 0.55)))
 
 func _tn_mosque(pos: Vector3) -> void:
-    var white := Color(0.96, 0.95, 0.91)
+    var white := Color(0.69, 0.68, 0.65)
     var green := _tn_mat("dome_g", Color(0.12, 0.5, 0.35), 0.35, 0.25)
     _box(self, Vector3(14, 8, 11), pos + Vector3(0, 4, 0), white, true)
     _box(self, Vector3(14.4, 0.7, 11.4), pos + Vector3(0, 8.35, 0), white)
@@ -1444,7 +1457,7 @@ func _create_park() -> void:
 func _create_hospital_details() -> void:
     # Red-cross sign + entrance canopy on the hospital front face (-Z side,
     # facing the plaza). Hospital landmark stands at (-36, 0, 36).
-    var white := Color(0.95, 0.95, 0.95)
+    var white := Color(0.68, 0.68, 0.68)
     var red := Color(0.85, 0.1, 0.12)
     _box(self, Vector3(2.0, 2.0, 0.12), Vector3(-36, 4.2, 30.92), white)
     _box(self, Vector3(0.55, 1.5, 0.14), Vector3(-36, 4.2, 30.9), red)

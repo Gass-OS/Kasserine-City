@@ -11,7 +11,7 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
     acc += delta
-    if acc < 0.3 or dn == null:
+    if acc < 0.3 or dn == null or not is_instance_valid(dn):
         return
     acc = 0.0
     var t: float = dn.t
@@ -20,6 +20,9 @@ func _process(delta: float) -> void:
     var mats = world.get("glow_materials")
     if mats != null:
         for m in mats:
+            # v0.4.1: harden — a freed material must never kill the frame.
+            if m == null or not is_instance_valid(m):
+                continue
             if m.has_meta("pool"):
                 var n := night * 0.55
                 m.albedo_color = Color(1.0 * n, 0.78 * n, 0.45 * n, 1.0)
@@ -28,6 +31,8 @@ func _process(delta: float) -> void:
     var player := world.get_node_or_null("Player") as Node3D
     var items: Array = []
     for l in get_tree().get_nodes_in_group("car_headlight"):
+        if l == null or not is_instance_valid(l):
+            continue
         var d := 9999.0
         if player != null:
             d = (l as Node3D).global_position.distance_to(player.global_position)
@@ -35,6 +40,8 @@ func _process(delta: float) -> void:
     items.sort_custom(func(a, b): return a[0] < b[0])
     for i in range(items.size()):
         var spot := items[i][1] as SpotLight3D
+        if spot == null or not is_instance_valid(spot):
+            continue
         var on: bool = night > 0.25 and i < 4 and items[i][0] < 45.0
         spot.light_energy = 3.0 * night if on else 0.0
         spot.visible = on
