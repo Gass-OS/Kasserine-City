@@ -104,7 +104,11 @@ func _make_bubble(parent: Node3D) -> Node3D:
 func _say(c: Node3D, text: String, hold: float) -> void:
     if not is_instance_valid(c):
         return
-    var root: Node3D = bubbles[c]
+    # v0.4.3: .get() guard — a citizen freed mid-conversation used to
+    # raise a key error here and leave `busy` stuck true forever.
+    var root: Node3D = bubbles.get(c)
+    if root == null:
+        return
     var label := root.get_node("Text") as Label3D
     var bg := root.get_node("Bg") as MeshInstance3D
     var w := clampf(text.length() * 0.115 + 0.5, 1.4, 5.5)
@@ -112,9 +116,22 @@ func _say(c: Node3D, text: String, hold: float) -> void:
     label.offset = Vector2(-(w * 0.5 - 0.25) / label.pixel_size, 0.0)
     label.text = ""
     root.visible = true
-    for i in range(1, text.length() + 1):
-        label.text = text.substr(0, i)
-        await get_tree().create_timer(0.03).timeout
+    # v0.4.3 FREEZE MITIGATION: the old code re-typed the Label3D one
+    # CHARACTER every 0.03 s — and a Label3D regenerates (and uploads)
+    # its text texture on EVERY text change. ~30 uploads per line, two
+    # lines per chat, a chat every ~10 s, all on the render thread of a
+    # phone GPU. The daytime freeze (08:24, clear day, nothing else
+    # firing) never reproduced headless, so the prime remaining suspect
+    # is a render-thread stall — and this texture churn is the busiest
+    # render-touching system in that window. Type word-by-word instead
+    # (~0.12 s/word, ~6 uploads per line): same typewriter feel, ~5x
+    # fewer texture uploads.
+    var words: PackedStringArray = text.split(" ")
+    var shown := ""
+    for wd in words:
+        shown += wd + " "
+        label.text = shown.strip_edges()
+        await get_tree().create_timer(0.12).timeout
     await get_tree().create_timer(hold).timeout
     root.visible = false
 

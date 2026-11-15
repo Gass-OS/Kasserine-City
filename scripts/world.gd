@@ -169,6 +169,13 @@ var lightning_flash := 0.0
 var lightning_timer := 12.0
 var rain_particles: GPUParticles3D
 var city_clock := 0.0
+# v0.4.3: heartbeat + long-frame watch for the daytime-freeze hunt.
+# The freeze (08:24, clear day) never reproduced headless — 300 s,
+# max frame 46 ms, zero errors — so if it freezes again on the phone
+# the logcat trail is the evidence: a heartbeat every 5 s pins the
+# exact game time of the freeze, and a long-frame line catches hitches
+# that recover (a permanent hang prints nothing after the last HB).
+var _hb_acc := 0.0
 
 # ===== v0.3: night criminals, prayer, most wanted =====
 var criminal_indices: Array[int] = [16, 19, 22]
@@ -781,6 +788,21 @@ func _update_weather(delta: float) -> void:
 
 func _process(delta):
     city_clock += delta
+    # v0.4.3: freeze diagnostics — see _hb_acc declaration above.
+    if delta > 0.5:
+        print("[FREEZE-WATCH] long frame %.2fs clock=%.1f" % [delta, city_clock])
+    _hb_acc += delta
+    if _hb_acc >= 5.0:
+        _hb_acc = 0.0
+        var dn := get_node_or_null("DayNight")
+        var gp := get_node_or_null("Gameplay")
+        var dlg := get_node_or_null("Dialogue")
+        var pl := get_node_or_null("Player") as Node3D
+        var t: float = float(dn.get("t")) if dn != null else -1.0
+        var m: int = int(gp.get("mission")) if gp != null else -1
+        var db: bool = bool(dlg.get("busy")) if dlg != null else false
+        var pp := str(pl.global_position) if pl != null else "?"
+        print("[HB] t=%.3f clock=%.1f mission=%d weather=%d dlg_busy=%s pos=%s" % [t, city_clock, m, weather, str(db), pp])
     _update_night_criminals()
     _update_prayer(delta)
     _update_weather(delta)
