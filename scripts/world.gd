@@ -12,6 +12,7 @@ func _ready():
     _create_park()
     _create_hospital_details()
     _create_street_signs()
+    _create_weather()
     var player = CharacterBody3D.new()
     player.set_script(PlayerScript)
     player.name = "Player"
@@ -22,6 +23,12 @@ func _ready():
     gameplay.name = "Gameplay"
     gameplay.set_script(preload("res://scripts/gameplay.gd"))
     add_child(gameplay)
+    # v0.4 (B): opening cinematic on first launch (plays once per
+    # install — Settings.intro_seen). Skippable with the SKIP button.
+    if not Settings.intro_seen:
+        var film := Node.new()
+        film.set_script(preload("res://scripts/intro_film.gd"))
+        add_child(film)
 
 func _create_environment():
     var env = Environment.new()
@@ -151,6 +158,16 @@ var citizen_routes: Array = []
 var citizen_route_indices: Array[int] = []
 var citizen_speeds: Array[float] = []
 var citizen_waits: Array[float] = []
+# v0.4: intro film flag — true while the opening cinematic plays, so
+# the story cards and other popups wait their turn.
+var intro_playing := false
+# v0.4 (G): weather — 0 clear, 1 cloudy, 2 rain. Changes on a timer.
+var weather := 0
+var weather_timer := 90.0
+var weather_dark := 0.0
+var lightning_flash := 0.0
+var lightning_timer := 12.0
+var rain_particles: GPUParticles3D
 var city_clock := 0.0
 
 # ===== v0.3: night criminals, prayer, most wanted =====
@@ -171,12 +188,17 @@ var prayer_last_index := -1
 var prayer_saved_routes: Array = []
 var prayer_saved_waits: Array[float] = []
 var prayer_group: Array[int] = [2, 3, 4, 5, 6, 7]
+var prayer_prev_t := 0.0
+var prayer_queued := -1
 var mosque_pos := Vector3(12, 0, -36)
 
 var traffic_cars: Array[Node3D] = []
 var traffic_paths: Array = []
 var traffic_targets: Array[int] = []
 var traffic_speeds: Array[float] = []
+# v0.4 (F): per-frame actual speed (follow logic slows a car below its
+# base speed; the car behind it must slow to the ACTUAL speed).
+var traffic_current_speeds: Array[float] = []
 
 func _create_people():
     var places = [
@@ -331,36 +353,36 @@ func _create_nature_and_vehicles():
     # Five AI cars follow connected loops on the actual road grid.
     _create_traffic_car(Vector3(-24, 0, -24), Color(0.72, 0.12, 0.10),
         [Vector3(-24, 0, -24), Vector3(0, 0, -24),
-         Vector3(0, 0, 0), Vector3(-24, 0, 0)], 4.2)
+         Vector3(0, 0, 0), Vector3(-24, 0, 0)], 4.2, 0)
     _create_traffic_car(Vector3(0, 0, -24), Color(0.12, 0.32, 0.72),
         [Vector3(0, 0, -24), Vector3(24, 0, -24),
-         Vector3(24, 0, 0), Vector3(0, 0, 0)], 4.6)
+         Vector3(24, 0, 0), Vector3(0, 0, 0)], 4.6, 1)
     _create_traffic_car(Vector3(-24, 0, 0), Color(0.82, 0.78, 0.63),
         [Vector3(-24, 0, 0), Vector3(-24, 0, 24),
-         Vector3(0, 0, 24), Vector3(0, 0, 0)], 3.8)
+         Vector3(0, 0, 24), Vector3(0, 0, 0)], 3.8, 2)
     _create_traffic_car(Vector3(0, 0, 0), Color(0.15, 0.48, 0.28),
         [Vector3(0, 0, 0), Vector3(24, 0, 0),
-         Vector3(24, 0, 24), Vector3(0, 0, 24)], 4.4)
+         Vector3(24, 0, 24), Vector3(0, 0, 24)], 4.4, 3)
     _create_traffic_car(Vector3(24, 0, 0), Color(0.12, 0.12, 0.14),
         [Vector3(24, 0, 0), Vector3(48, 0, 0),
-         Vector3(48, 0, 24), Vector3(24, 0, 24)], 4.0)
+         Vector3(48, 0, 24), Vector3(24, 0, 24)], 4.0, 0)
 
     # Three more cars (v0.3): 5 -> 8, all on the road grid.
     _create_traffic_car(Vector3(48, 0, -24), Color(0.90, 0.75, 0.15),
         [Vector3(48, 0, -24), Vector3(48, 0, 0),
-         Vector3(72, 0, 0), Vector3(72, 0, -24)], 4.1)
+         Vector3(72, 0, 0), Vector3(72, 0, -24)], 4.1, 1)
     _create_traffic_car(Vector3(-48, 0, 24), Color(0.50, 0.25, 0.60),
         [Vector3(-48, 0, 24), Vector3(-24, 0, 24),
-         Vector3(-24, 0, 48), Vector3(-48, 0, 48)], 4.3)
+         Vector3(-24, 0, 48), Vector3(-48, 0, 48)], 4.3, 2)
     _create_traffic_car(Vector3(0, 0, 48), Color(0.90, 0.90, 0.88),
         [Vector3(0, 0, 48), Vector3(0, 0, 72),
-         Vector3(24, 0, 72), Vector3(24, 0, 48)], 3.9)
+         Vector3(24, 0, 72), Vector3(24, 0, 48)], 3.9, 3)
 
     # Parked cars beside the roads (clear of the traffic lanes).
-    _create_car(Vector3(5.4, 0, -30), Color(0.92, 0.92, 0.9), PI * 0.5)
-    _create_car(Vector3(-5.4, 0, 18), Color(0.95, 0.8, 0.15), -PI * 0.5)
-    _create_car(Vector3(30, 0, -5.4), Color(0.2, 0.5, 0.75), 0.0)
-    _create_car(Vector3(-18, 0, 5.4), Color(0.55, 0.15, 0.2), PI)
+    _create_car(Vector3(5.4, 0, -30), Color(0.92, 0.92, 0.9), PI * 0.5, 2)
+    _create_car(Vector3(-5.4, 0, 18), Color(0.95, 0.8, 0.15), -PI * 0.5, 3)
+    _create_car(Vector3(30, 0, -5.4), Color(0.2, 0.5, 0.75), 0.0, 0)
+    _create_car(Vector3(-18, 0, 5.4), Color(0.55, 0.15, 0.2), PI, 1)
 
 func _create_tree(pos: Vector3, scale_factor: float):
     var tree = Node3D.new()
@@ -467,15 +489,33 @@ func _create_car_old(pos: Vector3, paint: Color, angle: float) -> Node3D:
     return car
 
 func _create_traffic_car(start: Vector3, paint: Color,
-        route: Array, speed: float):
-    var car := _create_car(start, paint, 0.0)
+        route: Array, speed: float, model_idx: int = -1):
+    var car := _create_car(start, paint, 0.0, model_idx)
     traffic_cars.append(car)
     traffic_paths.append(route)
     traffic_targets.append(1)
     traffic_speeds.append(speed)
+    traffic_current_speeds.append(speed)
+
+func _car_heading(j: int) -> Vector3:
+    # Current movement direction of traffic car j (toward its target),
+    # used by the follow logic. Returns ZERO if it cannot be computed.
+    if j >= traffic_paths.size() or j >= traffic_targets.size():
+        return Vector3.ZERO
+    var route: Array = traffic_paths[j]
+    if route.size() < 2 or j >= traffic_cars.size():
+        return Vector3.ZERO
+    var diff: Vector3 = (route[traffic_targets[j]] as Vector3) - traffic_cars[j].position
+    diff.y = 0.0
+    if diff.length() < 0.01:
+        return Vector3.ZERO
+    return diff.normalized()
 
 func _update_traffic(delta: float):
     for i in range(traffic_cars.size()):
+        # v0.4 (G): harden — path/target/speed must exist for this car.
+        if i >= traffic_paths.size() or i >= traffic_targets.size() or i >= traffic_speeds.size():
+            continue
         var car: Node3D = traffic_cars[i]
         var route: Array = traffic_paths[i]
         if route.size() < 2:
@@ -491,13 +531,61 @@ func _update_traffic(delta: float):
             continue
 
         var direction := difference.normalized()
+        # v0.4 (F): right-hand traffic — drive 1.5 m to the right of the
+        # road centre line, so a car coming the other way passes with
+        # ~3 m clearance instead of driving through it head-on. The
+        # offset is recomputed from the current direction, so the car
+        # follows an inset rectangle and rounds the corners by 1.5 m.
+        var side := direction.cross(Vector3.UP)
+        var lane_target: Vector3 = target + side * 1.5
+        var lane_diff := lane_target - car.position
+        lane_diff.y = 0.0
+        var lane_dist := lane_diff.length()
+        if lane_dist < 0.65:
+            traffic_targets[i] = (traffic_targets[i] + 1) % route.size()
+            continue
+        var lane_dir := lane_diff.normalized()
+        # v0.4 (F): follow logic — if a car is ahead of me within 6 m,
+        # slow to its actual speed (or stop under 3 m) instead of
+        # driving through it. At a shared corner two loops cross, so a
+        # car also YIELDS to a crossing car: the lower index has
+        # priority, the higher index stops — that way one car always
+        # keeps moving and there is no deadlock.
+        var speed := traffic_speeds[i]
+        for j in range(traffic_cars.size()):
+            if j == i:
+                continue
+            if j >= traffic_current_speeds.size():
+                continue
+            var other: Node3D = traffic_cars[j]
+            var to_other: Vector3 = other.position - car.position
+            to_other.y = 0.0
+            var d := to_other.length()
+            if d > 6.0 or d < 0.01:
+                continue
+            var ahead := to_other.normalized().dot(lane_dir)
+            if ahead < 0.2:
+                continue  # behind me or beside me
+            if d < 3.0 and j < i:
+                speed = 0.0  # yield at a crossing (lower index first)
+                continue
+            if ahead < 0.5:
+                continue  # not clearly ahead of me
+            if lane_dir.dot(_car_heading(j)) < 0.5:
+                continue  # different heading (crossing / oncoming)
+            if d < 3.0:
+                speed = 0.0
+            else:
+                speed = minf(speed, traffic_current_speeds[j] * 0.9)
+        if i < traffic_current_speeds.size():
+            traffic_current_speeds[i] = speed
         # Wheels must touch the VISIBLE road top (N-S roads 0.02, E-W
         # roads 0.04). The car collision stays flat at y = 0, so this
         # only moves the visual body; it snaps 2 cm at a turn, which is
         # invisible at driving distance.
-        car.position.y = 0.02 if absf(direction.z) > absf(direction.x) else 0.04
-        car.position += direction * minf(traffic_speeds[i] * delta, distance)
-        car.rotation.y = atan2(-direction.x, -direction.z)
+        car.position.y = 0.02 if absf(lane_dir.z) > absf(lane_dir.x) else 0.04
+        car.position += lane_dir * minf(speed * delta, lane_dist)
+        car.rotation.y = atan2(-lane_dir.x, -lane_dir.z)
 
 func _create_landmark_building(title: String, pos: Vector3,
         size: Vector3, color: Color):
@@ -535,6 +623,9 @@ func _create_street_lights():
 
 func _update_pedestrians(delta: float):
     for i in range(citizens.size()):
+        # v0.4 (G): harden — routes/speeds must exist for this citizen.
+        if i >= citizen_routes.size() or i >= citizen_speeds.size():
+            continue
         var person := citizens[i]
         # Night criminals (v0.3): they run from the player when he gets
         # close, instead of following their normal patrol route.
@@ -587,10 +678,77 @@ func _update_pedestrians(delta: float):
         person.position += direction * citizen_speeds[i] * delta
         person.rotation.y = atan2(-direction.x, -direction.z)
 
+func _create_weather() -> void:
+    # Rain: a box of falling streaks that follows the player. Created
+    # once, silent until the weather turns to rain.
+    rain_particles = GPUParticles3D.new()
+    rain_particles.name = "Rain"
+    rain_particles.amount = 1200
+    rain_particles.lifetime = 0.7
+    rain_particles.emitting = false
+    var mat := ParticleProcessMaterial.new()
+    mat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+    mat.emission_box_extents = Vector3(20, 1, 20)
+    mat.direction = Vector3(0, -1, 0)
+    mat.spread = 4.0
+    mat.initial_velocity_min = 22.0
+    mat.initial_velocity_max = 30.0
+    mat.gravity = Vector3(0, -9.8, 0)
+    rain_particles.process_material = mat
+    var streak := BoxMesh.new()
+    streak.size = Vector3(0.03, 0.55, 0.03)
+    var sm := StandardMaterial3D.new()
+    sm.albedo_color = Color(0.65, 0.75, 0.9, 0.55)
+    sm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+    sm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    streak.material = sm
+    rain_particles.draw_pass_1 = streak
+    rain_particles.position = Vector3(0, 10, 0)
+    add_child(rain_particles)
+
+func _apply_weather() -> void:
+    # Overcast darkening read by daynight.gd (0 clear, 0.25 cloudy, 0.55 rain).
+    weather_dark = 0.0 if weather == 0 else (0.25 if weather == 1 else 0.55)
+    if rain_particles != null:
+        rain_particles.emitting = weather == 2
+    var ca := get_node_or_null("CityAudio")
+    if ca != null and ca.has_method("set_rain"):
+        ca.set_rain(weather == 2)
+
+func _update_weather(delta: float) -> void:
+    weather_timer -= delta
+    if weather_timer <= 0.0:
+        var roll := randf()
+        if roll < 0.5:
+            weather = 0
+            weather_timer = randf_range(90.0, 180.0)
+        elif roll < 0.8:
+            weather = 1
+            weather_timer = randf_range(60.0, 120.0)
+        else:
+            weather = 2
+            weather_timer = randf_range(60.0, 120.0)
+        _apply_weather()
+    # Rain follows the player; lightning only while raining.
+    var pl := get_node_or_null("Player") as Node3D
+    if rain_particles != null and pl != null:
+        rain_particles.global_position = pl.global_position + Vector3(0, 10, 0)
+    if weather == 2:
+        lightning_timer -= delta
+        if lightning_timer <= 0.0:
+            lightning_timer = randf_range(8.0, 20.0)
+            lightning_flash = 1.0
+            var ca := get_node_or_null("CityAudio")
+            if ca != null and ca.has_method("play_thunder"):
+                ca.play_thunder()
+    if lightning_flash > 0.0:
+        lightning_flash = maxf(0.0, lightning_flash - delta * 4.0)
+
 func _process(delta):
     city_clock += delta
     _update_night_criminals()
     _update_prayer(delta)
+    _update_weather(delta)
     _update_pedestrians(delta)
     _update_traffic(delta)
 
@@ -773,7 +931,15 @@ func _car_box(car: Node3D, size: Vector3, pos: Vector3, mat: Material) -> MeshIn
     bm.size = size
     return _car_mesh(car, bm, pos, mat)
 
-func _create_car(pos: Vector3, paint: Color, angle: float) -> Node3D:
+# v0.4 (E): Kenney Car Kit (CC0, kenney.nl) — assets/cars/. The GLBs
+# face +Z, so the model is rotated PI inside the car (traffic drives
+# toward -Z). Ground offsets measured headless: the wheel bottoms sit
+# 0.6 m (suv: 1.0 m) below the model origin, times the 1.45 scale.
+const CAR_MODELS := ["res://assets/cars/sedan.glb", "res://assets/cars/taxi.glb", "res://assets/cars/police.glb", "res://assets/cars/suv.glb"]
+const CAR_MODEL_Y := [0.87, 0.87, 0.87, 1.45]
+const CAR_MODEL_SCALE := 1.45
+
+func _create_car(pos: Vector3, paint: Color, angle: float, model_idx: int = -1) -> Node3D:
     # AnimatableBody3D: a physics body driven by code. Traffic moves it by
     # setting its position, and the player CharacterBody3D now collides
     # with it instead of walking straight through the car.
@@ -784,61 +950,82 @@ func _create_car(pos: Vector3, paint: Color, angle: float) -> Node3D:
     car.rotation.y = angle
     add_child(car)
 
+    # v0.4 (E): Kenney GLB model when requested and loadable; otherwise
+    # the procedural box car below is the fallback.
+    var model: Node3D = null
+    if model_idx >= 0:
+        var mpath: String = CAR_MODELS[model_idx % CAR_MODELS.size()]
+        var packed := load(mpath) as PackedScene
+        if packed != null:
+            model = packed.instantiate() as Node3D
+            model.scale = Vector3.ONE * CAR_MODEL_SCALE
+            model.rotation.y = PI
+            model.position.y = CAR_MODEL_Y[model_idx % CAR_MODEL_Y.size()]
+            car.add_child(model)
+
     var car_body := CollisionShape3D.new()
     var car_box := BoxShape3D.new()
-    car_box.size = Vector3(1.9, 1.5, 4.35)
+    if model != null:
+        # Kenney cars at 1.45 scale: ~2.2 wide, 3.7-4.2 long.
+        car_box.size = Vector3(2.0, 1.4, 3.8)
+        car_body.position = Vector3(0, 0.75, 0)
+    else:
+        car_box.size = Vector3(1.9, 1.5, 4.35)
+        car_body.position = Vector3(0, 0.85, 0)
     car_body.shape = car_box
-    car_body.position = Vector3(0, 0.85, 0)
     car.add_child(car_body)
 
     var body := StandardMaterial3D.new()
     body.albedo_color = paint
     body.metallic = 0.65
     body.roughness = 0.28
-    var glass := StandardMaterial3D.new()
-    glass.albedo_color = Color(0.05, 0.09, 0.13)
-    glass.metallic = 0.8
-    glass.roughness = 0.08
-    var trim := StandardMaterial3D.new()
-    trim.albedo_color = Color(0.04, 0.04, 0.05)
-    trim.roughness = 0.7
 
-    _car_box(car, Vector3(1.86, 0.55, 4.3), Vector3(0, 0.62, 0), body)
-    _car_box(car, Vector3(1.84, 0.12, 4.32), Vector3(0, 0.42, 0), trim)
-    _car_box(car, Vector3(1.6, 0.5, 1.5), Vector3(0, 1.145, 0.15), glass)
-    _car_box(car, Vector3(1.6, 0.07, 1.5), Vector3(0, 1.43, 0.15), body)
-    var wf := PrismMesh.new()
-    wf.left_to_right = 0.0
-    wf.size = Vector3(0.9, 0.5, 1.6)
-    _car_mesh(car, wf, Vector3(0, 1.145, -1.05), glass, 90.0)
-    var wr := PrismMesh.new()
-    wr.left_to_right = 1.0
-    wr.size = Vector3(0.6, 0.5, 1.6)
-    _car_mesh(car, wr, Vector3(0, 1.145, 1.2), glass, 90.0)
+    if model == null:
 
-    var rubber := StandardMaterial3D.new()
-    rubber.albedo_color = Color(0.05, 0.05, 0.06)
-    rubber.roughness = 0.9
-    var rim := StandardMaterial3D.new()
-    rim.albedo_color = Color(0.75, 0.77, 0.8)
-    rim.metallic = 0.9
-    rim.roughness = 0.25
-    for side in [-1.0, 1.0]:
-        for end in [-1.0, 1.0]:
-            var wm := CylinderMesh.new()
-            wm.top_radius = 0.34
-            wm.bottom_radius = 0.34
-            wm.height = 0.26
-            wm.radial_segments = 16
-            var wheel := _car_mesh(car, wm, Vector3(side * 0.88, 0.34, end * 1.3), rubber)
-            wheel.rotation_degrees.z = 90
-            var rmesh := CylinderMesh.new()
-            rmesh.top_radius = 0.2
-            rmesh.bottom_radius = 0.2
-            rmesh.height = 0.28
-            rmesh.radial_segments = 12
-            var rimn := _car_mesh(car, rmesh, Vector3(side * 0.9, 0.34, end * 1.3), rim)
-            rimn.rotation_degrees.z = 90
+        var glass := StandardMaterial3D.new()
+        glass.albedo_color = Color(0.05, 0.09, 0.13)
+        glass.metallic = 0.8
+        glass.roughness = 0.08
+        var trim := StandardMaterial3D.new()
+        trim.albedo_color = Color(0.04, 0.04, 0.05)
+        trim.roughness = 0.7
+
+        _car_box(car, Vector3(1.86, 0.55, 4.3), Vector3(0, 0.62, 0), body)
+        _car_box(car, Vector3(1.84, 0.12, 4.32), Vector3(0, 0.42, 0), trim)
+        _car_box(car, Vector3(1.6, 0.5, 1.5), Vector3(0, 1.145, 0.15), glass)
+        _car_box(car, Vector3(1.6, 0.07, 1.5), Vector3(0, 1.43, 0.15), body)
+        var wf := PrismMesh.new()
+        wf.left_to_right = 0.0
+        wf.size = Vector3(0.9, 0.5, 1.6)
+        _car_mesh(car, wf, Vector3(0, 1.145, -1.05), glass, 90.0)
+        var wr := PrismMesh.new()
+        wr.left_to_right = 1.0
+        wr.size = Vector3(0.6, 0.5, 1.6)
+        _car_mesh(car, wr, Vector3(0, 1.145, 1.2), glass, 90.0)
+
+        var rubber := StandardMaterial3D.new()
+        rubber.albedo_color = Color(0.05, 0.05, 0.06)
+        rubber.roughness = 0.9
+        var rim := StandardMaterial3D.new()
+        rim.albedo_color = Color(0.75, 0.77, 0.8)
+        rim.metallic = 0.9
+        rim.roughness = 0.25
+        for side in [-1.0, 1.0]:
+            for end in [-1.0, 1.0]:
+                var wm := CylinderMesh.new()
+                wm.top_radius = 0.34
+                wm.bottom_radius = 0.34
+                wm.height = 0.26
+                wm.radial_segments = 16
+                var wheel := _car_mesh(car, wm, Vector3(side * 0.88, 0.34, end * 1.3), rubber)
+                wheel.rotation_degrees.z = 90
+                var rmesh := CylinderMesh.new()
+                rmesh.top_radius = 0.2
+                rmesh.bottom_radius = 0.2
+                rmesh.height = 0.28
+                rmesh.radial_segments = 12
+                var rimn := _car_mesh(car, rmesh, Vector3(side * 0.9, 0.34, end * 1.3), rim)
+                rimn.rotation_degrees.z = 90
 
     var head_mat := _glow_mat(Color(1.0, 0.95, 0.8), 4.0)
     var tail_mat := _glow_mat(Color(1.0, 0.1, 0.1), 2.5)
@@ -1300,6 +1487,10 @@ func _update_night_criminals() -> void:
         criminal_saved_speeds.clear()
         for k in range(criminal_indices.size()):
             var ci: int = criminal_indices[k]
+            # v0.4 (G): harden — never index past the citizen arrays.
+            if ci < 0 or ci >= citizen_speeds.size():
+                criminal_saved_speeds.append(0.0)
+                continue
             criminal_saved_speeds.append(citizen_speeds[ci])
             if not criminal_caught[k]:
                 citizen_speeds[ci] = 3.0
@@ -1308,6 +1499,8 @@ func _update_night_criminals() -> void:
     else:
         for k in range(criminal_indices.size()):
             var ci: int = criminal_indices[k]
+            if ci < 0 or ci >= citizen_speeds.size():
+                continue
             if k < criminal_saved_speeds.size():
                 citizen_speeds[ci] = criminal_saved_speeds[k]
             if k < criminal_markers.size():
@@ -1318,9 +1511,13 @@ func arrest_criminal(index: int) -> bool:
     if k < 0 or criminal_caught[k] or not criminal_active:
         return false
     criminal_caught[k] = true
-    citizen_routes[index] = []
-    citizen_waits[index] = 9999.0
-    citizen_speeds[index] = 0.0
+    # v0.4 (G): harden — index is from the citizens list, but guard anyway.
+    if index >= 0 and index < citizen_routes.size():
+        citizen_routes[index] = []
+    if index >= 0 and index < citizen_waits.size():
+        citizen_waits[index] = 9999.0
+    if index >= 0 and index < citizen_speeds.size():
+        citizen_speeds[index] = 0.0
     if k < criminal_markers.size():
         criminal_markers[k].text = "CAUGHT"
         criminal_markers[k].modulate = Color(1.0, 0.85, 0.3)
@@ -1346,18 +1543,46 @@ func _update_prayer(delta: float) -> void:
     var dn := get_node_or_null("DayNight")
     if dn == null:
         return
+    var t: float = dn.t
+    # v0.4: a new game day starts when the clock wraps (t jumps back).
+    # Each prayer must fire once per day, so the last-fired marker resets.
+    if t < prayer_prev_t:
+        prayer_last_index = -1
+    prayer_prev_t = t
     if prayer_active:
         prayer_timer -= delta
         if prayer_timer <= 0.0:
             _end_prayer()
+        else:
+            # v0.4: a 20 s prayer can outlast the gap to the next prayer
+            # (16:00 -> 18:30 is only 14.9 s at day_length 240). Watch
+            # for the next window passing mid-prayer and queue it, so no
+            # prayer is ever swallowed — it fires right after this one.
+            _check_prayer_window(t)
+            return
+    # Not praying (or the prayer just ended): start a queued prayer first.
+    if prayer_queued >= 0:
+        var q := prayer_queued
+        prayer_queued = -1
+        _start_prayer(q)
         return
-    var t: float = dn.t
+    _check_prayer_window(t)
+
+func _check_prayer_window(t: float) -> void:
     for pi in range(prayer_times.size()):
         if pi == prayer_last_index:
             continue
         var pt: float = prayer_times[pi]
-        if t >= pt and t < pt + 0.004:
-            _start_prayer(pi)
+        # v0.4: window widened 0.004 -> 0.02 of a day. The old window was
+        # so narrow that a single frame hitch could skip a prayer.
+        # 0.02 is still far shorter than the gap between prayers, and
+        # prayer_last_index prevents double-firing.
+        if t >= pt and t < pt + 0.02:
+            if prayer_active:
+                prayer_queued = pi
+                prayer_last_index = pi
+            else:
+                _start_prayer(pi)
             return
 
 func _start_prayer(pi: int) -> void:
@@ -1367,8 +1592,15 @@ func _start_prayer(pi: int) -> void:
     prayer_saved_routes.clear()
     prayer_saved_waits.clear()
     for i in range(citizens.size()):
-        prayer_saved_routes.append(citizen_routes[i].duplicate())
-        prayer_saved_waits.append(citizen_waits[i])
+        # v0.4 (G): harden — routes/waits must exist for this citizen.
+        if i < citizen_routes.size():
+            prayer_saved_routes.append(citizen_routes[i].duplicate())
+        else:
+            prayer_saved_routes.append([])
+        if i < citizen_waits.size():
+            prayer_saved_waits.append(citizen_waits[i])
+        else:
+            prayer_saved_waits.append(0.0)
     var gp := get_node_or_null("Gameplay")
     if gp != null and gp.has_method("_notice"):
         gp._notice(Settings.t("prayer_time"))

@@ -35,6 +35,17 @@ var player_node: Node3D = null
 var adhan_player: AudioStreamPlayer
 var adhan_stream: AudioStreamMP3 = null
 
+# v0.4 (G): rain patter + thunder rumble (procedural, same generator
+# pattern as the murmur/engine players).
+var rain_player: AudioStreamPlayer
+var rain_playback: AudioStreamGeneratorPlayback
+var rain_on := false
+var rain_noise := 0.0
+var thunder_player: AudioStreamPlayer
+var thunder_playback: AudioStreamGeneratorPlayback
+var thunder_frames_left := 0
+var thunder_phase := 0.0
+
 
 func _ready() -> void:
 	ambience = AudioStreamPlayer.new()
@@ -53,6 +64,12 @@ func _ready() -> void:
 
 	murmur_player = _make_generator_player(-16.0, "StreetMurmur")
 	engine_player = _make_generator_player(-18.0, "EngineHum")
+	rain_player = _make_generator_player(-60.0, "Rain")
+	if rain_player != null:
+		rain_playback = rain_player.get_stream_playback() as AudioStreamGeneratorPlayback
+	thunder_player = _make_generator_player(-10.0, "Thunder")
+	if thunder_player != null:
+		thunder_playback = thunder_player.get_stream_playback() as AudioStreamGeneratorPlayback
 	if murmur_player != null:
 		murmur_playback = murmur_player.get_stream_playback() as AudioStreamGeneratorPlayback
 	if engine_player != null:
@@ -135,6 +152,47 @@ func play_adhan() -> void:
 	adhan_player.play()
 
 
+func set_rain(on: bool) -> void:
+	# v0.4 (G): called by world.gd when the weather changes.
+	rain_on = on
+	if on and rain_player != null and not rain_player.playing:
+		rain_player.play()
+
+func play_thunder() -> void:
+	# v0.4 (G): one low rumble after a lightning flash.
+	thunder_frames_left = int(1.5 * 22050)
+	thunder_phase = 0.0
+	if thunder_player != null and not thunder_player.playing:
+		thunder_player.play()
+
+func _push_rain() -> void:
+	if rain_playback == null:
+		return
+	# Fade the rain bed in/out instead of cutting it.
+	var target := -18.0 if rain_on else -60.0
+	rain_player.volume_db = lerpf(rain_player.volume_db, target, 0.02)
+	if not rain_on:
+		return
+	var avail := rain_playback.get_frames_available()
+	var n := mini(avail, 1024)
+	for i in range(n):
+		# Filtered noise = rain patter on the streets.
+		rain_noise = rain_noise * 0.92 + (randf() * 2.0 - 1.0) * 0.08
+		var v := rain_noise * 2.2 + (randf() * 2.0 - 1.0) * 0.12
+		rain_playback.push_frame(Vector2(v, v))
+
+func _push_thunder() -> void:
+	if thunder_playback == null or thunder_frames_left <= 0:
+		return
+	var avail := thunder_playback.get_frames_available()
+	var n := mini(avail, thunder_frames_left)
+	for i in range(n):
+		var env := 1.0 - thunder_phase / (1.5 * 22050.0)
+		var v := (0.6 * sin(TAU * 48.0 * thunder_phase / 22050.0) + 0.4 * (randf() * 2.0 - 1.0)) * env * 0.8
+		thunder_playback.push_frame(Vector2(v, v))
+		thunder_phase += 1.0
+	thunder_frames_left -= n
+
 func _process(_delta: float) -> void:
 	if murmur_playback == null or engine_playback == null:
 		return
@@ -143,6 +201,8 @@ func _process(_delta: float) -> void:
 		player_node = world.get_node_or_null("Player") as Node3D
 	_push_murmur()
 	_push_engine()
+	_push_rain()
+	_push_thunder()
 
 
 func _push_murmur() -> void:

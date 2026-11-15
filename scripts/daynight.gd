@@ -66,6 +66,18 @@ func _process(delta: float) -> void:
 	t = fposmod(t + delta / Settings.day_length, 1.0)
 	var d := sin((t - 0.25) * TAU)
 	var day := clampf(d * 2.5 + 0.35, 0.0, 1.0)
+	# v0.4 (G): weather darkening + lightning flash, read from the world.
+	var w := get_parent()
+	var dark := 0.0
+	var flash := 0.0
+	if w != null:
+		var dv = w.get("weather_dark")
+		if dv != null:
+			dark = float(dv)
+		var fv = w.get("lightning_flash")
+		if fv != null:
+			flash = float(fv)
+	day = clampf(day * (1.0 - dark * 0.6), 0.0, 1.0)
 	var warm := pow(clampf(1.0 - absf(d), 0.0, 1.0), 4.0)
 	sun.rotation_degrees = Vector3(-(t - 0.25) * 360.0, -35.0, 0.0)
 	sun.light_energy = day * 1.3
@@ -80,7 +92,8 @@ func _process(delta: float) -> void:
 	sky_mat.ground_horizon_color = hor
 	sky_mat.ground_bottom_color = top.darkened(0.5)
 	env.ambient_light_color = Color(0.08, 0.1, 0.2).lerp(Color(0.75, 0.8, 0.9), day)
-	env.ambient_light_energy = lerpf(0.5, 1.0, day)
+	# v0.4 (G): lightning flash spikes the ambient light; rain thickens fog.
+	env.ambient_light_energy = lerpf(0.5, 1.0, day) + flash * 1.2
 	var hrs := t * 24.0
 	_fx_update(day, warm, hor)
 	clock.text = "%02d:%02d" % [int(hrs), int(fmod(hrs, 1.0) * 60.0)]
@@ -105,6 +118,13 @@ func _fx_setup() -> void:
 
 func _fx_update(day: float, warm: float, hor: Color) -> void:
 	env.fog_light_color = hor
-	env.fog_density = lerpf(0.007, 0.0035, day)
+	# v0.4 (G): rain thickens the fog (dark = weather_dark from the world).
+	var w := get_parent()
+	var dark := 0.0
+	if w != null:
+		var dv = w.get("weather_dark")
+		if dv != null:
+			dark = float(dv)
+	env.fog_density = lerpf(0.007, 0.0035, day) + dark * 0.004
 	env.glow_intensity = lerpf(1.0, 0.6, day)
 	env.tonemap_exposure = lerpf(1.15, 1.0, day)

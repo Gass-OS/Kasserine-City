@@ -6,7 +6,6 @@ var mission := 0
 var panel: PanelContainer
 var info: Label
 var objective: Label
-var minimap: Label
 var notice: Label
 var notice_time := 0.0
 var chatter_time := 7.0
@@ -38,6 +37,14 @@ var click_playback: AudioStreamGeneratorPlayback
 var click_frames_left := 0
 var click_phase := 0.0
 var score := 0
+# v0.4 (H): radio power toggle — ON (default) chatters, OFF is silent.
+var radio_on := true
+var radio_button: Button
+# v0.4 (C): story chapter cards (new officer's first week).
+var story_panel: PanelContainer
+var story_title: Label
+var story_body: Label
+var story_shown := {}
 
 const RADIO_LINES_EN = [
     "Unit 2, all clear at the market.",
@@ -104,6 +111,7 @@ func _ready():
     player.look_sensitivity = 0.008 * Settings.look_sensitivity
     _create_interface()
     _create_radio()
+    _create_story_panel()
     _add_speech_bubbles()
     _update_objective()
     _notice("Welcome to Kasserine City!")
@@ -189,6 +197,74 @@ func _click_then_open(title: String) -> void:
     _play_click()
     _open(title)
 
+func _create_story_panel() -> void:
+    # v0.4 (C): chapter cards for the story (first week in Kasserine).
+    var layer = CanvasLayer.new()
+    layer.layer = 25
+    layer.process_mode = Node.PROCESS_MODE_ALWAYS
+    add_child(layer)
+    story_panel = PanelContainer.new()
+    story_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+    story_panel.position = Vector2(-320, -230)
+    story_panel.custom_minimum_size = Vector2(640, 460)
+    story_panel.visible = false
+    layer.add_child(story_panel)
+    var column = VBoxContainer.new()
+    story_panel.add_child(column)
+    story_title = Label.new()
+    story_title.add_theme_font_size_override("font_size", 30)
+    story_title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.5))
+    story_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    column.add_child(story_title)
+    story_body = Label.new()
+    story_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    story_body.add_theme_font_size_override("font_size", 22)
+    story_body.custom_minimum_size = Vector2(580, 220)
+    column.add_child(story_body)
+    var cont = Button.new()
+    cont.text = Settings.t("continue")
+    cont.custom_minimum_size = Vector2(0, 64)
+    cont.add_theme_font_size_override("font_size", 24)
+    cont.pressed.connect(_close_story_card)
+    column.add_child(cont)
+
+func _close_story_card() -> void:
+    _play_click()
+    story_panel.visible = false
+    get_tree().paused = false
+
+func _show_story_card(flag: String, title_key: String, body_key: String) -> void:
+    if story_shown.get(flag, false):
+        return
+    story_shown[flag] = true
+    story_title.text = Settings.t(title_key)
+    story_body.text = Settings.t(body_key)
+    story_panel.visible = true
+    get_tree().paused = true
+
+func _update_story() -> void:
+    # One card per chapter, in story order. The intro film (if playing)
+    # and the pause menu take precedence — the card waits its turn.
+    if world.intro_playing:
+        return
+    if story_panel.visible or panel.visible:
+        return
+    var mp := world.get_node_or_null("MissionsPlus")
+    if not story_shown.get("ch1", false):
+        _show_story_card("ch1", "story_ch1_title", "story_ch1_body")
+        return
+    if mission == 1:
+        _show_story_card("ch2", "story_ch2_title", "story_ch2_body")
+        return
+    if world.criminal_active:
+        _show_story_card("ch3", "story_ch3_title", "story_ch3_body")
+        return
+    if mp != null and mp.wanted_step_active():
+        _show_story_card("ch4", "story_ch4_title", "story_ch4_body")
+        return
+    if mp != null and mp.done:
+        _show_story_card("end", "story_end_title", "story_end_body")
+
 func _radio_lines() -> Array:
     match Settings.language:
         "fr":
@@ -253,13 +329,22 @@ func _play_radio_sound() -> void:
             blip_player.play()
 
 func _toggle_radio() -> void:
-    radio_panel.visible = not radio_panel.visible
-    if radio_panel.visible and radio_lines.is_empty():
-        _radio_push_line()
-    elif radio_panel.visible:
-        # Panel re-opened with an existing log: no new line, but the
-        # RADIO press still gets its walkie-talkie sound.
-        _play_radio_sound()
+    # v0.4 (H): RADIO is a power toggle. ON (default): the log panel
+    # shows and chatter runs every 20-40 s. OFF: no chatter, no radio
+    # sounds, panel hidden. The button always shows the current state.
+    radio_on = not radio_on
+    if radio_button != null:
+        radio_button.text = Settings.t("radio_on" if radio_on else "radio_off")
+    radio_panel.visible = radio_on
+    if radio_on:
+        radio_timer = randf_range(20.0, 40.0)
+        if radio_lines.is_empty():
+            _radio_push_line()
+        else:
+            _play_radio_sound()
+        _notice(Settings.t("radio_started"))
+    else:
+        _notice(Settings.t("radio_stopped"))
 
 func _create_interface():
     var layer = CanvasLayer.new()
@@ -280,18 +365,15 @@ func _create_interface():
         button.add_theme_font_size_override("font_size", 22)
         menu.add_child(button)
         button.pressed.connect(_click_then_open.bind(title))
+        if title == "RADIO":
+            radio_button = button
+            button.text = Settings.t("radio_on")
 
     objective = Label.new()
     objective.position = Vector2(18, 68)
     objective.add_theme_font_size_override("font_size", 22)
     objective.add_theme_color_override("font_color", Color.YELLOW)
     layer.add_child(objective)
-
-    minimap = Label.new()
-    minimap.position = Vector2(18, 110)
-    minimap.add_theme_font_size_override("font_size", 19)
-    minimap.add_theme_color_override("font_color", Color.WHITE)
-    layer.add_child(minimap)
 
     notice = Label.new()
     notice.position = Vector2(18, 250)
@@ -401,7 +483,8 @@ func _open(title: String):
 
 func _resume_game():
     panel.visible = false
-    get_tree().paused = false
+    if story_panel == null or not story_panel.visible:
+        get_tree().paused = false
     _disarm_exit()
 
 func _exit_game():
@@ -512,20 +595,19 @@ func interact():
     _notice("Move closer to Amine or another citizen and press USE.")
 
 func _process(delta):
+    _update_story()
     if notice_time > 0.0:
         notice_time -= delta
         if notice_time <= 0.0:
             notice.text = ""
 
-    minimap.text = "MINIMAP [NORTH UP]\nX: %.0f   Z: %.0f\nM: Market (-24, 0)\nG: Garage (24, 0)\nA: Amine (3, 7)" % [player.global_position.x, player.global_position.z]
-    if world.criminal_active:
-        minimap.text += "\nNight criminals caught: %d / 3" % world.criminals_caught_count()
-
     # Police radio chatter (v0.3): a new line every 20-40 s while playing.
-    radio_timer -= delta
-    if radio_timer <= 0.0:
-        radio_timer = randf_range(20.0, 40.0)
-        _radio_push_line()
+    # v0.4: only while the radio is ON (RADIO button toggles power).
+    if radio_on:
+        radio_timer -= delta
+        if radio_timer <= 0.0:
+            radio_timer = randf_range(20.0, 40.0)
+            _radio_push_line()
     # Push the two-tone blip frames (1250 Hz, then 950 Hz).
     if blip_frames_left > 0 and blip_playback != null:
         var avail := blip_playback.get_frames_available()

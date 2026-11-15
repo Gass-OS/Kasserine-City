@@ -3,24 +3,11 @@ extends Node
 var world: Node
 var last := {}
 var smooth := {}
-var label: Label
-var shown := 0.0
 
 func _ready() -> void:
     await get_tree().process_frame
     await get_tree().process_frame
     world = get_parent()
-    var layer := CanvasLayer.new()
-    layer.layer = 20
-    add_child(layer)
-    label = Label.new()
-    label.position = Vector2(20, 270)
-    label.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
-    label.custom_minimum_size = Vector2(900, 0)
-    label.add_theme_font_size_override("font_size", 16)
-    label.add_theme_constant_override("outline_size", 5)
-    label.add_theme_color_override("font_outline_color", Color.BLACK)
-    layer.add_child(label)
 
 func _bodies() -> Array:
     var out: Array = []
@@ -43,7 +30,6 @@ func _model_of(n: Node) -> Node3D:
 func _process(delta: float) -> void:
     if world == null:
         return
-    shown += delta
     for n in _bodies():
         if not is_instance_valid(n):
             continue
@@ -80,10 +66,3 @@ func _process(delta: float) -> void:
             else:
                 m.position.y = lerpf(m.position.y, 0.0, 0.2)
                 m.rotation.z = lerpf(m.rotation.z, 0.0, 0.2)
-    if label != null:
-        if shown < 45.0:
-            var pl := world.get_node_or_null("Player")
-            var pm := _model_of(pl) if pl else null
-            label.text = "Animation: " + (str(pm.get_meta("anim_status", "?")) if pm else "no player model")
-        else:
-            label.text = ""

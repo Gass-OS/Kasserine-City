@@ -12,6 +12,13 @@ var click_player: AudioStreamPlayer
 var click_playback: AudioStreamGeneratorPlayback
 var click_frames_left := 0
 var click_phase := 0.0
+# v0.4 (B): boot sequence — title fades in, loading bar fills, tap to start.
+var boot_t := 0.0
+var boot_bar: ProgressBar
+var boot_tap: Label
+var boot_title: Label
+# v0.4 (A): on-device MP3 test result label (settings screen).
+var test_label: Label
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -35,7 +42,7 @@ func _ready() -> void:
 	# playback is null ("Player is inactive") and the click never sounds.
 	click_player.play()
 	click_playback = click_player.get_stream_playback() as AudioStreamGeneratorPlayback
-	_show_main()
+	_show_boot()
 
 func _play_click() -> void:
 	if click_playback != null:
@@ -52,10 +59,30 @@ func _notification(what: int) -> void:
 	# Android back button: never quit at once. On the main menu it opens
 	# the quit confirmation; on settings / confirm it goes back one step.
 	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
-		if screen == "quit" or screen == "settings":
+		if screen == "boot":
+			_show_main()
+		elif screen == "quit" or screen == "settings":
 			_show_main()
 		else:
 			_show_quit_confirm()
+
+func _input(event: InputEvent) -> void:
+	# v0.4 (B): the boot screen is a tap-to-start screen. A tap during
+	# the fill jumps the bar to full; a tap after that enters the menu.
+	if screen != "boot":
+		return
+	var tapped := false
+	if event is InputEventScreenTouch and event.pressed:
+		tapped = true
+	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		tapped = true
+	if not tapped or boot_t < 0.5:
+		return
+	if boot_bar.value < 100.0:
+		boot_bar.value = 100.0
+		boot_tap.visible = true
+	else:
+		_show_main()
 
 func _process(delta: float) -> void:
 	tick += delta
@@ -63,6 +90,15 @@ func _process(delta: float) -> void:
 	if acc > 0.6:
 		acc = 0.0
 		queue_redraw()
+	if screen == "boot":
+		boot_t += delta
+		if boot_bar != null and boot_bar.value < 100.0:
+			boot_bar.value = minf(100.0, boot_t / 2.5 * 100.0)
+			if boot_bar.value >= 100.0:
+				boot_tap.visible = true
+		if boot_tap != null and boot_tap.visible:
+			# Blink the "tap to start" prompt.
+			boot_tap.modulate.a = 0.55 + 0.45 * sin(tick * 5.0)
 	# Push the UI click frames (0.06 s at 1600 Hz).
 	if click_frames_left > 0 and click_playback != null:
 		var avail := click_playback.get_frames_available()
@@ -140,6 +176,53 @@ func _button(text: String, cb: Callable) -> Button:
 		b.add_theme_stylebox_override(st, sb)
 	b.pressed.connect(_click_then.bind(cb))
 	return b
+
+func _show_boot() -> void:
+	# v0.4 (B): modern boot sequence — the Godot splash is already off,
+	# so this animated title + loading bar is the first thing the
+	# player sees instead of a dead dark screen.
+	screen = "boot"
+	boot_t = 0.0
+	_clear()
+	var v := _center_box(460)
+	boot_title = _label("KASSERINE CITY", 54, Color(1, 0.85, 0.5))
+	boot_title.modulate.a = 0.0
+	v.add_child(boot_title)
+	v.add_child(_label(Settings.t("subtitle"), 22, Color(0.85, 0.9, 1.0)))
+	v.add_child(Control.new())
+	boot_bar = ProgressBar.new()
+	boot_bar.min_value = 0.0
+	boot_bar.max_value = 100.0
+	boot_bar.value = 0.0
+	boot_bar.show_percentage = false
+	boot_bar.custom_minimum_size = Vector2(0, 26)
+	v.add_child(boot_bar)
+	v.add_child(_label(Settings.t("loading"), 20, Color(0.85, 0.9, 1.0)))
+	boot_tap = _label(Settings.t("tap_to_start"), 24, Color(1, 0.85, 0.5))
+	boot_tap.visible = false
+	v.add_child(boot_tap)
+	create_tween().tween_property(boot_title, "modulate:a", 1.0, 0.9)
+
+func _test_mp3(fname: String, ok_key: String, missing_key: String) -> void:
+	# v0.4 (A): play the bundled MP3 right now in the menu, so the user
+	# can tell on the device whether the file loads and sounds — no
+	# need to wait for a prayer time or a radio chatter.
+	_play_click()
+	var path := "res://assets/audio/" + fname
+	if not ResourceLoader.exists(path):
+		test_label.text = Settings.t(missing_key)
+		return
+	var stream := load(path) as AudioStreamMP3
+	if stream == null:
+		test_label.text = Settings.t(missing_key)
+		return
+	var p := AudioStreamPlayer.new()
+	p.stream = stream
+	p.volume_db = -6.0
+	add_child(p)
+	p.play()
+	p.finished.connect(p.queue_free)
+	test_label.text = Settings.t(ok_key)
 
 func _show_main() -> void:
 	screen = "main"
@@ -220,4 +303,8 @@ func _show_settings() -> void:
 		Settings.save_settings()
 		_show_settings.call_deferred())
 	v.add_child(lang)
+	test_label = _label("", 20, Color(1, 0.85, 0.5))
+	v.add_child(test_label)
+	v.add_child(_button(Settings.t("test_adhan"), func(): _test_mp3("adhan.mp3", "adhan_ok", "adhan_missing")))
+	v.add_child(_button(Settings.t("test_radio"), func(): _test_mp3("police.mp3", "radio_ok", "radio_missing")))
 	v.add_child(_button(Settings.t("back"), _show_main))
