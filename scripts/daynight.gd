@@ -55,8 +55,10 @@ func _setup() -> void:
 	layer.add_child(clock)
 	_fx_setup()
 
+# v0.3.1: day and night are exactly half the cycle each (20 min + 20 min
+# of a 2400 s day_length). Was 0.22/0.78 (night 44%, day 56%).
 func is_night() -> bool:
-	return t < 0.22 or t > 0.78
+	return t < 0.25 or t > 0.75
 
 func _process(delta: float) -> void:
 	if env == null:
@@ -98,7 +100,7 @@ func _fx_setup() -> void:
 	env.fog_enabled = Settings.quality >= 1
 	env.fog_density = 0.004
 	env.fog_sky_affect = 0.5
-	sun.directional_shadow_max_distance = 110.0
+	sun.directional_shadow_max_distance = 80.0
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
 
 func _fx_update(day: float, warm: float, hor: Color) -> void:

@@ -7,7 +7,9 @@ var master_volume := 0.8
 var quality := 1
 var language := "en"
 var look_sensitivity := 1.0
-var day_length := 240.0
+# v0.3.1: 2400 s = a full 24 h game day in 40 real minutes — day 20 min
+# + night 20 min (is_night splits the cycle exactly in half). Was 240 s.
+var day_length := 2400.0
 var first_person := false
 
 const STR := {

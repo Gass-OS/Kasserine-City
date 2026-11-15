@@ -24,6 +24,12 @@ var camera_pivot: Node3D
 var camera: Camera3D
 var hud: TouchHUD
 var status_label: Label
+# v0.3.1: UI click sound (procedural) on the round HUD buttons so every
+# tap gives immediate audible feedback.
+var click_player: AudioStreamPlayer
+var click_playback: AudioStreamGeneratorPlayback
+var click_frames_left := 0
+var click_phase := 0.0
 
 class TouchHUD extends Control:
     var joystick_vector := Vector2.ZERO
@@ -119,6 +125,25 @@ func _ready():
     get_viewport().size_changed.connect(_refresh_hud)
     _refresh_hud()
 
+    var cgen := AudioStreamGenerator.new()
+    cgen.mix_rate = 22050
+    cgen.buffer_length = 0.2
+    click_player = AudioStreamPlayer.new()
+    click_player.stream = cgen
+    click_player.volume_db = -6.0
+    add_child(click_player)
+    # v0.3.1 FIX: play() before get_stream_playback() — without it the
+    # playback is null ("Player is inactive") and the click never sounds.
+    click_player.play()
+    click_playback = click_player.get_stream_playback() as AudioStreamGeneratorPlayback
+
+func _play_click() -> void:
+    if click_playback != null:
+        click_frames_left = int(0.06 * 22050)
+        click_phase = 0.0
+        if not click_player.playing:
+            click_player.play()
+
 func _refresh_hud():
     if is_instance_valid(hud):
         hud.joystick_vector = touch_move
@@ -176,17 +201,21 @@ func _input(event):
             if jump_touch == -1 and _near(event.position, _point("jump"), 56):
                 jump_touch = event.index
                 jump_requested = true
+                _play_click()
                 hud.joystick_vector = touch_move
                 hud.queue_redraw()
             elif sprint_touch == -1 and _near(event.position, _point("sprint"), 52):
                 sprint_touch = event.index
+                _play_click()
                 hud.joystick_vector = touch_move
                 hud.queue_redraw()
             elif interact_touch == -1 and _near(event.position, _point("interact"), 52):
                 interact_touch = event.index
+                _play_click()
                 get_parent().interact()
             elif camera_touch == -1 and _near(event.position, _point("camera"), 52):
                 camera_touch = event.index
+                _play_click()
                 toggle_camera()
             elif move_touch == -1 and _near(event.position, _point("move"), 96):
                 move_touch = event.index
@@ -238,6 +267,15 @@ func _process(delta):
         message_timer -= delta
         if message_timer <= 0.0 and is_instance_valid(status_label):
             status_label.text = "KASSERINE CITY"
+    # Push the UI click frames (0.06 s at 1600 Hz).
+    if click_frames_left > 0 and click_playback != null:
+        var avail := click_playback.get_frames_available()
+        var n := mini(avail, click_frames_left)
+        for i in range(n):
+            var s := sin(TAU * 1600.0 * click_phase / 22050.0) * 0.8
+            click_playback.push_frame(Vector2(s, s))
+            click_phase += 1.0
+        click_frames_left -= n
 
 func _physics_process(delta):
     if not is_on_floor():

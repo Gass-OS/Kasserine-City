@@ -82,6 +82,14 @@ func _build() -> void:
     ground_nrm = _nrm(0.18, 32, k_c, 2.0)
     road_mat = _make(ROAD, asphalt_tex, asphalt_nrm, 0.25, 0.8, 0.8)
     ground_mat = _make(GROUND, ground_tex, ground_nrm, 0.15, 0.95, 0.6)
+    # v0.3.1: the 220 m sand slab showed a strong wavy moire ripple.
+    # Two causes, both here: the cellular normal map bends the light on
+    # every cell of the huge flat surface, and the slab receives the
+    # directional shadow acne on top of it. The albedo noise texture
+    # stays (sandy variation), but the ground no longer uses a normal map
+    # and no longer receives shadows — the ripple is gone for good.
+    ground_mat.normal_enabled = false
+    ground_mat.disable_receive_shadows = true
 
 func _apply(n: Node) -> void:
     if n is MeshInstance3D:

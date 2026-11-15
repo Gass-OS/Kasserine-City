@@ -25,6 +25,18 @@ var blip_player: AudioStreamPlayer
 var blip_playback: AudioStreamGeneratorPlayback
 var blip_frames_left := 0
 var blip_phase := 0.0
+# v0.3.1: walkie-talkie sound — the user's own police.mp3, same dual
+# path as the adhan (Download folder first, then the copy baked into
+# the APK). When present it replaces the procedural blip; when missing
+# the blip stays as the fallback. Cached after the first load.
+var radio_sound_player: AudioStreamPlayer
+var police_stream: AudioStreamMP3 = null
+# v0.3.1: UI click sound (procedural, same generator pattern as the blip)
+# so every button tap gives immediate audible feedback.
+var click_player: AudioStreamPlayer
+var click_playback: AudioStreamGeneratorPlayback
+var click_frames_left := 0
+var click_phase := 0.0
 var score := 0
 
 const RADIO_LINES_EN = [
@@ -130,9 +142,52 @@ func _create_radio() -> void:
     gen.buffer_length = 0.2
     blip_player = AudioStreamPlayer.new()
     blip_player.stream = gen
-    blip_player.volume_db = -14.0
+    # v0.3.1: -6 dB (was -14) — the blip was inaudible on a phone speaker.
+    blip_player.volume_db = -6.0
     add_child(blip_player)
+    # v0.3.1 FIX: get_stream_playback() on a player that never played
+    # returns null ("Player is inactive") — so the blip was dead, not
+    # just quiet. play() first (empty buffer = silence until frames
+    # are pushed), exactly like the working murmur/engine players.
+    blip_player.play()
     blip_playback = blip_player.get_stream_playback() as AudioStreamGeneratorPlayback
+
+    # v0.3.1: dedicated player for police.mp3 (-6 dB, no loop). The
+    # stream is loaded lazily on the first radio sound — no file exists
+    # in the VM, and a missing file is normal (blip fallback).
+    radio_sound_player = AudioStreamPlayer.new()
+    radio_sound_player.name = "RadioSoundPlayer"
+    radio_sound_player.volume_db = -6.0
+    add_child(radio_sound_player)
+
+    # UI click: one short 1600 Hz tick, loud enough to hear on a tap.
+    var cgen := AudioStreamGenerator.new()
+    cgen.mix_rate = 22050
+    cgen.buffer_length = 0.2
+    click_player = AudioStreamPlayer.new()
+    click_player.stream = cgen
+    click_player.volume_db = -6.0
+    add_child(click_player)
+    # v0.3.1 FIX: same as the blip above — play() before
+    # get_stream_playback(), or click_playback stays null and no click
+    # is ever heard.
+    click_player.play()
+    click_playback = click_player.get_stream_playback() as AudioStreamGeneratorPlayback
+
+func _play_click() -> void:
+    if click_playback != null:
+        click_frames_left = int(0.06 * 22050)
+        click_phase = 0.0
+        if not click_player.playing:
+            click_player.play()
+
+func _click_then(cb: Callable) -> void:
+    _play_click()
+    cb.call()
+
+func _click_then_open(title: String) -> void:
+    _play_click()
+    _open(title)
 
 func _radio_lines() -> Array:
     match Settings.language:
@@ -151,7 +206,44 @@ func _radio_push_line() -> void:
         radio_lines.remove_at(0)
     if is_instance_valid(radio_log):
         radio_log.text = "\n".join(radio_lines)
-    # Two-tone blip: 0.07 s at 1250 Hz, then 0.07 s at 950 Hz.
+    _play_radio_sound()
+
+
+# v0.3.1: dual-path MP3 load, same contract as the adhan in
+# city_audio.gd — /storage/emulated/0/Download/police.mp3 first, then
+# res://assets/audio/police.mp3. Guarded: a missing file returns null
+# and the caller falls back to the procedural blip, never an error.
+func _load_police_stream() -> AudioStreamMP3:
+    var ext_path := "/storage/emulated/0/Download/police.mp3"
+    if FileAccess.file_exists(ext_path):
+        var s := load(ext_path) as AudioStreamMP3
+        if s == null:
+            var bytes := FileAccess.get_file_as_bytes(ext_path)
+            if bytes.size() > 0:
+                var mp3 := AudioStreamMP3.new()
+                mp3.data = bytes
+                s = mp3
+        if s != null:
+            return s
+    if FileAccess.file_exists("res://assets/audio/police.mp3"):
+        var b := load("res://assets/audio/police.mp3") as AudioStreamMP3
+        if b != null:
+            return b
+    return null
+
+
+# v0.3.1: the radio sound. police.mp3 when present (once per call,
+# restarting if still playing); otherwise the procedural two-tone blip
+# (0.07 s at 1250 Hz, then 0.07 s at 950 Hz).
+func _play_radio_sound() -> void:
+    if police_stream == null:
+        police_stream = _load_police_stream()
+    if police_stream != null:
+        if radio_sound_player.playing:
+            radio_sound_player.stop()
+        radio_sound_player.stream = police_stream
+        radio_sound_player.play()
+        return
     if blip_playback != null:
         blip_frames_left = int(0.14 * 22050)
         blip_phase = 0.0
@@ -162,6 +254,10 @@ func _toggle_radio() -> void:
     radio_panel.visible = not radio_panel.visible
     if radio_panel.visible and radio_lines.is_empty():
         _radio_push_line()
+    elif radio_panel.visible:
+        # Panel re-opened with an existing log: no new line, but the
+        # RADIO press still gets its walkie-talkie sound.
+        _play_radio_sound()
 
 func _create_interface():
     var layer = CanvasLayer.new()
@@ -181,7 +277,7 @@ func _create_interface():
         button.custom_minimum_size = Vector2(118, 56)
         button.add_theme_font_size_override("font_size", 22)
         menu.add_child(button)
-        button.pressed.connect(_open.bind(title))
+        button.pressed.connect(_click_then_open.bind(title))
 
     objective = Label.new()
     objective.position = Vector2(18, 68)
@@ -245,28 +341,28 @@ func _create_interface():
     resume.text = "RESUME / CLOSE"
     resume.custom_minimum_size = Vector2(180, 60)
     resume.add_theme_font_size_override("font_size", 20)
-    resume.pressed.connect(_resume_game)
+    resume.pressed.connect(_click_then.bind(_resume_game))
     actions.add_child(resume)
 
     var settings = Button.new()
     settings.text = "SETTINGS"
     settings.custom_minimum_size = Vector2(140, 60)
     settings.add_theme_font_size_override("font_size", 20)
-    settings.pressed.connect(_open.bind("SETTINGS"))
+    settings.pressed.connect(_click_then_open.bind("SETTINGS"))
     actions.add_child(settings)
 
     exit_button = Button.new()
     exit_button.text = "EXIT"
     exit_button.custom_minimum_size = Vector2(120, 60)
     exit_button.add_theme_font_size_override("font_size", 20)
-    exit_button.pressed.connect(_exit_game)
+    exit_button.pressed.connect(_click_then.bind(_exit_game))
     actions.add_child(exit_button)
 
     var to_menu = Button.new()
     to_menu.text = "MAIN MENU"
     to_menu.custom_minimum_size = Vector2(140, 60)
     to_menu.add_theme_font_size_override("font_size", 20)
-    to_menu.pressed.connect(_to_main_menu)
+    to_menu.pressed.connect(_click_then.bind(_to_main_menu))
     actions.add_child(to_menu)
 
 func _notification(what: int) -> void:
@@ -434,10 +530,20 @@ func _process(delta):
         var n := mini(avail, blip_frames_left)
         for i in range(n):
             var f := 1250.0 if blip_phase < 0.07 * 22050.0 else 950.0
-            var s := sin(TAU * f * blip_phase / 22050.0) * 0.5
+            # v0.3.1: 0.9 amplitude (was 0.5) — clearly audible.
+            var s := sin(TAU * f * blip_phase / 22050.0) * 0.9
             blip_playback.push_frame(Vector2(s, s))
             blip_phase += 1.0
         blip_frames_left -= n
+    # Push the UI click frames (0.06 s at 1600 Hz).
+    if click_frames_left > 0 and click_playback != null:
+        var cavail := click_playback.get_frames_available()
+        var cn := mini(cavail, click_frames_left)
+        for i in range(cn):
+            var cs := sin(TAU * 1600.0 * click_phase / 22050.0) * 0.8
+            click_playback.push_frame(Vector2(cs, cs))
+            click_phase += 1.0
+        click_frames_left -= cn
 
     if mission == 1 or mission == 2:
         if player.global_position.distance_to(TARGETS[mission]) < 6.0:

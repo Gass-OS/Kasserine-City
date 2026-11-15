@@ -19,6 +19,9 @@ textures/vram_compression/import_etc2_astc=true
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 textures/default_filters/use_nearest_mipmap_filter=false
+# v0.3.1: bigger directional shadow map on mobile — smaller texels fight
+# the wavy shadow-acne moire on the big flat ground and road surfaces.
+lights_and_shadows/directional_shadow/size.mobile=4096
 environment/defaults/default_clear_color=Color(0.45, 0.68, 0.88, 1)
 
 [autoload]

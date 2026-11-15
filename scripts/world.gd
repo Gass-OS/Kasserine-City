@@ -42,19 +42,36 @@ func _create_environment():
     # Large flat boxes (walls, roads, sand) showed a speckled "shadow acne"
     # pattern with the default bias. A slightly larger bias + normal bias
     # keeps the shadows clean without detaching them.
-    sun.shadow_bias = 0.05
-    sun.shadow_normal_bias = 0.3
+    # v0.3.1: the whole 220 m sand slab showed a strong wavy concentric
+    # moire ripple — acne across the full shadow frustum. Three changes:
+    # the frustum is tightened to 80 m (smaller shadow texels), the bias
+    # is raised again, and the ground slab itself no longer receives
+    # shadows (see _create_city). Shadow map size is raised to 4096 on
+    # mobile in project.godot for the same reason.
+    sun.shadow_bias = 0.08
+    sun.shadow_normal_bias = 0.5
+    sun.directional_shadow_max_distance = 80.0
     add_child(sun)
 
-func _box(parent: Node3D, size: Vector3, pos: Vector3, color: Color, solid := false):
+func _box(parent: Node3D, size: Vector3, pos: Vector3, color: Color, solid := false, visual_lift := 0.0, no_shadow_recv := false):
     var mesh_instance = MeshInstance3D.new()
     var mesh = BoxMesh.new()
     mesh.size = size
     mesh_instance.mesh = mesh
     var material = StandardMaterial3D.new()
     material.albedo_color = color
+    if no_shadow_recv:
+        # Big flat surfaces (the 220 m ground slab) are the canvas where
+        # directional-shadow acne shows up as a wavy moire ripple, so they
+        # opt out of receiving shadows entirely.
+        material.disable_receive_shadows = true
     mesh_instance.material_override = material
-    mesh_instance.position = pos
+    # visual_lift moves ONLY the visible mesh. The collision shape stays at
+    # pos: a CharacterBody3D capsule stalls on a 2-4 cm vertical step
+    # (measured headless: it climbed a 0.04 m step but stopped moving
+    # forward at the edge), while the flat ground slab underneath already
+    # carries the player at y = 0. The raised road tops read as curbs.
+    mesh_instance.position = pos + Vector3(0, visual_lift, 0)
     parent.add_child(mesh_instance)
 
     if solid:
@@ -68,22 +85,32 @@ func _box(parent: Node3D, size: Vector3, pos: Vector3, color: Color, solid := fa
         parent.add_child(body)
 
 func _create_city():
-    # Ground slab top is exactly y = 0, flush with the road tops below, so
-    # the player's feet rest on the visible surface everywhere. (It used to
-    # sit at -0.05 while the roads sat at +0.06 with no collision, so the
-    # player fell through the road visuals and the legs sank 11 cm.)
-    _box(self, Vector3(220, 1, 220), Vector3(0, -0.5, 0), Color(0.66, 0.58, 0.4), true)
+    # Ground slab top is exactly y = 0, flush with the road collision
+    # tops below, so the player's feet rest on the visible surface
+    # everywhere. (It used to sit at -0.05 while the roads sat at +0.06
+    # with no collision, so the player fell through the road visuals and
+    # the legs sank 11 cm.) The slab does not receive shadows: on a flat
+    # 220 m surface the directional light's shadow map shows up as a wavy
+    # moire ripple, and no bias fully removes it.
+    _box(self, Vector3(220, 1, 220), Vector3(0, -0.5, 0), Color(0.66, 0.58, 0.4), true, 0.0, true)
 
     var road = Color(0.16, 0.17, 0.18)
     var line = Color(0.92, 0.83, 0.55)
 
+    # Road tops used to sit at exactly y = 0.0, coplanar with the ground
+    # slab top, so the roads flickered and disappeared at grazing angles
+    # (classic z-fighting). The visible road surface is now lifted above
+    # the ground — N-S 0.02, E-W 0.04, so the two directions no longer
+    # fight each other at intersections either — while the collision
+    # stays flat at y = 0 (see _box: visual_lift). Lane lines sit 1 cm
+    # above their road's visible top.
     for i in range(-4, 5):
         var p = float(i) * 24.0
-        _box(self, Vector3(8, 0.08, 210), Vector3(p, -0.04, 0), road, true)
-        _box(self, Vector3(210, 0.08, 8), Vector3(0, -0.04, p), road, true)
+        _box(self, Vector3(8, 0.08, 210), Vector3(p, -0.04, 0), road, true, 0.02)
+        _box(self, Vector3(210, 0.08, 8), Vector3(0, -0.04, p), road, true, 0.04)
         for j in range(-9, 10):
-            _box(self, Vector3(0.16, 0.02, 2.5), Vector3(p, 0.01, j * 11.0), line)
-            _box(self, Vector3(2.5, 0.02, 0.16), Vector3(j * 11.0, 0.01, p), line)
+            _box(self, Vector3(0.16, 0.02, 2.5), Vector3(p, 0.04, j * 11.0), line)
+            _box(self, Vector3(2.5, 0.02, 0.16), Vector3(j * 11.0, 0.06, p), line)
 
     var rng = RandomNumberGenerator.new()
     rng.seed = 302610
@@ -464,6 +491,11 @@ func _update_traffic(delta: float):
             continue
 
         var direction := difference.normalized()
+        # Wheels must touch the VISIBLE road top (N-S roads 0.02, E-W
+        # roads 0.04). The car collision stays flat at y = 0, so this
+        # only moves the visual body; it snaps 2 cm at a turn, which is
+        # invisible at driving distance.
+        car.position.y = 0.02 if absf(direction.z) > absf(direction.x) else 0.04
         car.position += direction * minf(traffic_speeds[i] * delta, distance)
         car.rotation.y = atan2(-direction.x, -direction.z)
 
@@ -747,6 +779,7 @@ func _create_car(pos: Vector3, paint: Color, angle: float) -> Node3D:
     # with it instead of walking straight through the car.
     var car := AnimatableBody3D.new()
     car.name = "ParkedCar"
+    car.sync_to_physics = false
     car.position = pos
     car.rotation.y = angle
     add_child(car)
@@ -1030,7 +1063,9 @@ func _tn_mosque(pos: Vector3) -> void:
     var green := _tn_mat("dome_g", Color(0.12, 0.5, 0.35), 0.35, 0.25)
     _box(self, Vector3(14, 8, 11), pos + Vector3(0, 4, 0), white, true)
     _box(self, Vector3(14.4, 0.7, 11.4), pos + Vector3(0, 8.35, 0), white)
-    _box(self, Vector3(14.1, 0.3, 11.1), pos + Vector3(0, 6.3, 0), Color(0.12, 0.5, 0.35))
+    # v0.3.1: the thin green trim band that wrapped the mosque at y 6.3
+    # read on the phone as a stray glitch stripe at the top edge. Removed;
+    # the green domes already carry the mosque's identity.
     _tn_dome(pos + Vector3(0, 8.7, 0), 4.2, green)
     _tn_dome(pos + Vector3(-4.8, 8.7, 3.2), 1.6, green)
     _tn_dome(pos + Vector3(4.8, 8.7, 3.2), 1.6, green)
@@ -1337,6 +1372,11 @@ func _start_prayer(pi: int) -> void:
     var gp := get_node_or_null("Gameplay")
     if gp != null and gp.has_method("_notice"):
         gp._notice(Settings.t("prayer_time"))
+    # v0.3.1: the adhan, on top of the notice + gathering. Guarded: a
+    # missing adhan.mp3 simply means no sound, never a crash.
+    var ca := get_node_or_null("CityAudio")
+    if ca != null and ca.has_method("play_adhan"):
+        ca.play_adhan()
 
 func _end_prayer() -> void:
     prayer_active = false

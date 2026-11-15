@@ -6,6 +6,12 @@ var towers: Array = []
 var tick := 0.0
 var acc := 0.0
 var screen := "main"
+# v0.3.1: UI click sound (procedural) so every menu tap gives immediate
+# audible feedback — the user reported total silence on the phone.
+var click_player: AudioStreamPlayer
+var click_playback: AudioStreamGeneratorPlayback
+var click_frames_left := 0
+var click_phase := 0.0
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -18,7 +24,29 @@ func _ready() -> void:
 	ui = Control.new()
 	ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(ui)
+	var cgen := AudioStreamGenerator.new()
+	cgen.mix_rate = 22050
+	cgen.buffer_length = 0.2
+	click_player = AudioStreamPlayer.new()
+	click_player.stream = cgen
+	click_player.volume_db = -6.0
+	add_child(click_player)
+	# v0.3.1 FIX: play() before get_stream_playback() — without it the
+	# playback is null ("Player is inactive") and the click never sounds.
+	click_player.play()
+	click_playback = click_player.get_stream_playback() as AudioStreamGeneratorPlayback
 	_show_main()
+
+func _play_click() -> void:
+	if click_playback != null:
+		click_frames_left = int(0.06 * 22050)
+		click_phase = 0.0
+		if not click_player.playing:
+			click_player.play()
+
+func _click_then(cb: Callable) -> void:
+	_play_click()
+	cb.call()
 
 func _notification(what: int) -> void:
 	# Android back button: never quit at once. On the main menu it opens
@@ -35,6 +63,15 @@ func _process(delta: float) -> void:
 	if acc > 0.6:
 		acc = 0.0
 		queue_redraw()
+	# Push the UI click frames (0.06 s at 1600 Hz).
+	if click_frames_left > 0 and click_playback != null:
+		var avail := click_playback.get_frames_available()
+		var n := mini(avail, click_frames_left)
+		for i in range(n):
+			var s := sin(TAU * 1600.0 * click_phase / 22050.0) * 0.8
+			click_playback.push_frame(Vector2(s, s))
+			click_phase += 1.0
+		click_frames_left -= n
 
 func _draw() -> void:
 	var s := size
@@ -101,7 +138,7 @@ func _button(text: String, cb: Callable) -> Button:
 		sb.border_color = Color(1, 0.7, 0.4, 0.8)
 		sb.set_border_width_all(2)
 		b.add_theme_stylebox_override(st, sb)
-	b.pressed.connect(cb)
+	b.pressed.connect(_click_then.bind(cb))
 	return b
 
 func _show_main() -> void:
@@ -154,7 +191,7 @@ func _show_settings() -> void:
 	_row(v, "sensitivity", 0.3, 2.5, 0.1, Settings.look_sensitivity, func(x):
 		Settings.look_sensitivity = x
 		Settings.save_settings())
-	_row(v, "day_length", 60.0, 600.0, 10.0, Settings.day_length, func(x):
+	_row(v, "day_length", 60.0, 3600.0, 60.0, Settings.day_length, func(x):
 		Settings.day_length = x
 		Settings.save_settings())
 	v.add_child(_label(Settings.t("quality"), 22))
