@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -86,3 +86,18 @@ jobs:
           path: build/KasserineCity.apk
           if-no-files-found: error
           retention-days: 14
+
+      - name: Read version
+        id: version
+        run: |
+          VERSION=$(sed -n 's/^version\/name="\(.*\)"/\1/p' export_presets.cfg)
+          test -n "$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Kasserine City v${{ steps.version.outputs.version }}
+          files: build/KasserineCity.apk
+          generate_release_notes: true
