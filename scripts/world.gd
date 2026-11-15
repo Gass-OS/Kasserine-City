@@ -176,6 +176,15 @@ var criminal_caught: Array[bool] = [false, false, false]
 var criminal_markers: Array[Label3D] = []
 var criminal_active := false
 var criminal_saved_speeds: Array[float] = []
+# v0.4.2: night-transition stagger queue (see _update_night_criminals).
+# The on-device freeze hangs the app with no GDScript error, and no
+# `while` loop exists in any per-frame path (audited all scripts), so
+# the prime suspect is a native/rendering hang from several light /
+# material / particle state changes landing in one frame at the
+# transition. The marker flips are staggered one per frame and every
+# step is printed, so a logcat after a freeze shows how far it got.
+var night_transition_queue: Array[int] = []
+var night_transition_target := false
 var wanted_index := 21
 var wanted_spots: Array[Vector3] = [Vector3(-24, 0, 6), Vector3(24, 0, -6), Vector3(-60, 0, 54)]
 var wanted_spot := Vector3.ZERO
@@ -351,6 +360,8 @@ func _create_nature_and_vehicles():
     _create_street_lights()
 
     # Five AI cars follow connected loops on the actual road grid.
+    # v0.4.2: sportier mix — sedan-sports / taxi / race /
+    # hatchback-sports / police / suv-luxury.
     _create_traffic_car(Vector3(-24, 0, -24), Color(0.72, 0.12, 0.10),
         [Vector3(-24, 0, -24), Vector3(0, 0, -24),
          Vector3(0, 0, 0), Vector3(-24, 0, 0)], 4.2, 0)
@@ -359,30 +370,38 @@ func _create_nature_and_vehicles():
          Vector3(24, 0, 0), Vector3(0, 0, 0)], 4.6, 1)
     _create_traffic_car(Vector3(-24, 0, 0), Color(0.82, 0.78, 0.63),
         [Vector3(-24, 0, 0), Vector3(-24, 0, 24),
-         Vector3(0, 0, 24), Vector3(0, 0, 0)], 3.8, 2)
+         Vector3(0, 0, 24), Vector3(0, 0, 0)], 3.8, 4)
     _create_traffic_car(Vector3(0, 0, 0), Color(0.15, 0.48, 0.28),
         [Vector3(0, 0, 0), Vector3(24, 0, 0),
-         Vector3(24, 0, 24), Vector3(0, 0, 24)], 4.4, 3)
+         Vector3(24, 0, 24), Vector3(0, 0, 24)], 4.4, 5)
     _create_traffic_car(Vector3(24, 0, 0), Color(0.12, 0.12, 0.14),
         [Vector3(24, 0, 0), Vector3(48, 0, 0),
-         Vector3(48, 0, 24), Vector3(24, 0, 24)], 4.0, 0)
+         Vector3(48, 0, 24), Vector3(24, 0, 24)], 4.0, 2)
 
     # Three more cars (v0.3): 5 -> 8, all on the road grid.
     _create_traffic_car(Vector3(48, 0, -24), Color(0.90, 0.75, 0.15),
         [Vector3(48, 0, -24), Vector3(48, 0, 0),
-         Vector3(72, 0, 0), Vector3(72, 0, -24)], 4.1, 1)
+         Vector3(72, 0, 0), Vector3(72, 0, -24)], 4.1, 3)
     _create_traffic_car(Vector3(-48, 0, 24), Color(0.50, 0.25, 0.60),
         [Vector3(-48, 0, 24), Vector3(-24, 0, 24),
-         Vector3(-24, 0, 48), Vector3(-48, 0, 48)], 4.3, 2)
+         Vector3(-24, 0, 48), Vector3(-48, 0, 48)], 4.3, 0)
     _create_traffic_car(Vector3(0, 0, 48), Color(0.90, 0.90, 0.88),
         [Vector3(0, 0, 48), Vector3(0, 0, 72),
-         Vector3(24, 0, 72), Vector3(24, 0, 48)], 3.9, 3)
+         Vector3(24, 0, 72), Vector3(24, 0, 48)], 3.9, 1)
 
-    # Parked cars beside the roads (clear of the traffic lanes).
-    _create_car(Vector3(5.4, 0, -30), Color(0.92, 0.92, 0.9), PI * 0.5, 2)
-    _create_car(Vector3(-5.4, 0, 18), Color(0.95, 0.8, 0.15), -PI * 0.5, 3)
-    _create_car(Vector3(30, 0, -5.4), Color(0.2, 0.5, 0.75), 0.0, 0)
-    _create_car(Vector3(-18, 0, 5.4), Color(0.55, 0.15, 0.2), PI, 1)
+    # Parked cars parallel-parked ON the road edges (v0.4.2): 3.9 m from
+    # the road centre line, aligned with the road. The old spots were
+    # 2 m off the road edge on the sand (the green SUV at (-5.4, 18)
+    # sat on a plaza corner overlapping a bin). 3.9 m clears the
+    # traffic lane boxes (lane at 1.5 m + 1.0 m half-box = 2.5 m edge;
+    # car half-width 1.09 m -> inner edge at 2.81 m) with ~0.3 m to
+    # spare, and keeps the car visibly parked at the curb.
+    # The police car by the POLICE station (36, -36) is the DRIVABLE
+    # one — walk up to it and press USE.
+    police_car = _create_car(Vector3(20.1, 0, -36), Color(0.92, 0.92, 0.9), 0.0, 2, "PoliceCar")
+    _create_car(Vector3(-6, 0, 20.1), Color(0.95, 0.8, 0.15), -PI * 0.5, 3, "ParkedCar0")
+    _create_car(Vector3(20.1, 0, -6), Color(0.2, 0.5, 0.75), 0.0, 0, "ParkedCar1")
+    _create_car(Vector3(-20.1, 0, -14), Color(0.55, 0.15, 0.2), PI, 1, "ParkedCar2")
 
 func _create_tree(pos: Vector3, scale_factor: float):
     var tree = Node3D.new()
@@ -490,7 +509,7 @@ func _create_car_old(pos: Vector3, paint: Color, angle: float) -> Node3D:
 
 func _create_traffic_car(start: Vector3, paint: Color,
         route: Array, speed: float, model_idx: int = -1):
-    var car := _create_car(start, paint, 0.0, model_idx)
+    var car := _create_car(start, paint, 0.0, model_idx, "TrafficCar")
     traffic_cars.append(car)
     traffic_paths.append(route)
     traffic_targets.append(1)
@@ -577,6 +596,21 @@ func _update_traffic(delta: float):
                 speed = 0.0
             else:
                 speed = minf(speed, traffic_current_speeds[j] * 0.9)
+        # v0.4.2: yield to the DRIVEN police car — the player car is not
+        # in traffic_cars, so without this traffic would drive straight
+        # through it. Same rules as the follow logic above.
+        var pl := get_node_or_null("Player")
+        if pl != null and pl.get("driving") == true:
+            var to_pl: Vector3 = (pl as Node3D).global_position - car.position
+            to_pl.y = 0.0
+            var dpl := to_pl.length()
+            if dpl > 0.01 and dpl < 6.0:
+                var ahead_pl := to_pl.normalized().dot(lane_dir)
+                if ahead_pl > 0.5:
+                    if dpl < 3.0:
+                        speed = 0.0
+                    else:
+                        speed = minf(speed, (pl as CharacterBody3D).velocity.length() * 0.9)
         if i < traffic_current_speeds.size():
             traffic_current_speeds[i] = speed
         # Wheels must touch the VISIBLE road top (N-S roads 0.02, E-W
@@ -709,6 +743,7 @@ func _create_weather() -> void:
 func _apply_weather() -> void:
     # Overcast darkening read by daynight.gd (0 clear, 0.25 cloudy, 0.55 rain).
     weather_dark = 0.0 if weather == 0 else (0.25 if weather == 1 else 0.55)
+    print("[WEATHER] change -> %d dark=%.2f" % [weather, weather_dark])
     if rain_particles != null:
         rain_particles.emitting = weather == 2
     var ca := get_node_or_null("CityAudio")
@@ -751,6 +786,8 @@ func _process(delta):
     _update_weather(delta)
     _update_pedestrians(delta)
     _update_traffic(delta)
+    _update_driven_car()
+    _update_siren()
 
     animal_clock += delta
     for i in range(animal_nodes.size()):
@@ -899,6 +936,9 @@ func _create_street_lamp(pos: Vector3):
     lamp.name = "StreetLamp"
     lamp.position = pos
     add_child(lamp)
+    # v0.4.2: lamp head position for the night OmniLight pool
+    # (night_glow.gd snaps the 6 nearest lights to these heads).
+    lamp_positions.append(pos + Vector3(0.85, 4.28, 0))
     var metal := Color(0.16, 0.17, 0.19)
     _box(lamp, Vector3(0.14, 4.4, 0.14), Vector3(0, 2.2, 0), metal)
     _box(lamp, Vector3(1.1, 0.1, 0.12), Vector3(0.45, 4.35, 0), metal)
@@ -938,23 +978,64 @@ func _car_box(car: Node3D, size: Vector3, pos: Vector3, mat: Material) -> MeshIn
 # face +Z, so the model is rotated PI inside the car (traffic drives
 # toward -Z). Ground offsets measured headless: the wheel bottoms sit
 # 0.6 m (suv: 1.0 m) below the model origin, times the 1.45 scale.
-const CAR_MODELS := ["res://assets/cars/sedan.glb", "res://assets/cars/taxi.glb", "res://assets/cars/police.glb", "res://assets/cars/suv.glb"]
+const CAR_MODELS := ["res://assets/cars/sedan-sports.glb", "res://assets/cars/taxi.glb", "res://assets/cars/police.glb", "res://assets/cars/suv-luxury.glb", "res://assets/cars/race.glb", "res://assets/cars/hatchback-sports.glb"]
+# v0.4.2: sportier Kenney variants (same CC0 Car Kit) — sedan-sports
+# and hatchback-sports sit lower with a spoiler, race is a low
+# open-wheeler, suv-luxury is the sleeker SUV. Taxi + police keep
+# their identities. Measured headless at 1.45 scale (probe_cars.gd):
+# wheel bottoms of ALL 8 models are at y = 0.000 (police -0.013).
 # v0.4.1 FIX (flying cars): the Kenney GLB origins sit AT ground level
-# — measured headless at 1.45 scale, the wheel bottoms of all 4 models
-# are at exactly y = 0.000 (body bottom 0.22-0.29). The v0.4 offsets
-# 0.87 / 1.45 assumed the origin was above the wheels, so every car
-# floated 0.87 m (suv 1.45 m) in the air. Correct offset is 0.0: the
-# traffic code already puts the car root on the road top (0.02/0.04)
-# and parked cars sit on the ground at y = 0.
-const CAR_MODEL_Y := [0.0, 0.0, 0.0, 0.0]
+# — the v0.4 offsets 0.87 / 1.45 assumed the origin was above the
+# wheels, so every car floated. Correct offset is 0.0: the traffic
+# code already puts the car root on the road top (0.02/0.04) and
+# parked cars sit on the ground at y = 0.
+const CAR_MODEL_Y := [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 const CAR_MODEL_SCALE := 1.45
 
-func _create_car(pos: Vector3, paint: Color, angle: float, model_idx: int = -1) -> Node3D:
+# v0.4.2: the drivable police car (near the POLICE station) + siren
+# light-bar materials (pulsed while the siren is on). Set in
+# _create_nature_and_vehicles / _create_car.
+var police_car: Node3D = null
+var siren_red_mat: StandardMaterial3D = null
+var siren_blue_mat: StandardMaterial3D = null
+# v0.4.2: lamp head positions (world space) for the night OmniLight
+# pool in night_glow.gd. Filled by _create_street_lamp.
+var lamp_positions: Array[Vector3] = []
+
+# v0.4.2: combined local AABB of a GLB model (unscaled model space —
+# the 1.45 scale is applied by the caller). Used to size the collision
+# box and to place headlights / mirrors / spotlight on the REAL car
+# ends instead of the old fixed z = +/-2.17, which floated up to 0.9 m
+# in front of the shorter GLB cars.
+func _model_aabb(model: Node3D) -> AABB:
+    var aabb := AABB()
+    var first := true
+    var stack: Array[Node] = [model]
+    while not stack.is_empty():
+        var n: Node = stack.pop_back()
+        if n is MeshInstance3D:
+            var mi := n as MeshInstance3D
+            if mi.mesh != null:
+                var ga := mi.get_aabb()
+                for cx in [ga.position.x, ga.end.x]:
+                    for cy in [ga.position.y, ga.end.y]:
+                        for cz in [ga.position.z, ga.end.z]:
+                            var c: Vector3 = mi.transform * Vector3(cx, cy, cz)
+                            if first:
+                                aabb = AABB(c, Vector3.ZERO)
+                                first = false
+                            else:
+                                aabb = aabb.expand(c)
+        for ch in n.get_children():
+            stack.append(ch)
+    return aabb
+
+func _create_car(pos: Vector3, paint: Color, angle: float, model_idx: int = -1, car_name: String = "Car") -> Node3D:
     # AnimatableBody3D: a physics body driven by code. Traffic moves it by
     # setting its position, and the player CharacterBody3D now collides
     # with it instead of walking straight through the car.
     var car := AnimatableBody3D.new()
-    car.name = "ParkedCar"
+    car.name = car_name
     car.sync_to_physics = false
     car.position = pos
     car.rotation.y = angle
@@ -963,6 +1044,7 @@ func _create_car(pos: Vector3, paint: Color, angle: float, model_idx: int = -1) 
     # v0.4 (E): Kenney GLB model when requested and loadable; otherwise
     # the procedural box car below is the fallback.
     var model: Node3D = null
+    var model_aabb := AABB(Vector3(-0.95, 0, -2.15), Vector3(1.9, 1.5, 4.3))
     if model_idx >= 0:
         var mpath: String = CAR_MODELS[model_idx % CAR_MODELS.size()]
         var packed := load(mpath) as PackedScene
@@ -972,18 +1054,36 @@ func _create_car(pos: Vector3, paint: Color, angle: float, model_idx: int = -1) 
             model.rotation.y = PI
             model.position.y = CAR_MODEL_Y[model_idx % CAR_MODEL_Y.size()]
             car.add_child(model)
+            model_aabb = _model_aabb(model)
+    # Car-space extents (model +Z is the front; the PI rotation maps it
+    # to the car's -Z). All light / mirror / collision placement below
+    # is derived from these, so every model gets parts on its own ends.
+    var half_w := model_aabb.size.x * CAR_MODEL_SCALE * 0.5
+    var front_z := -model_aabb.end.z * CAR_MODEL_SCALE
+    var rear_z := -model_aabb.position.z * CAR_MODEL_SCALE
+    var mid_z := (front_z + rear_z) * 0.5
+    var top_y := model_aabb.end.y * CAR_MODEL_SCALE
 
     var car_body := CollisionShape3D.new()
     var car_box := BoxShape3D.new()
     if model != null:
-        # Kenney cars at 1.45 scale: ~2.2 wide, 3.7-4.2 long.
-        car_box.size = Vector3(2.0, 1.4, 3.8)
-        car_body.position = Vector3(0, 0.75, 0)
+        # Box hugs the real model (+15 cm sides, +25 cm length) instead
+        # of the old fixed 2.0 x 1.4 x 3.8, which was up to 0.9 m longer
+        # than the car and made the player bump into thin air.
+        car_box.size = Vector3(
+            model_aabb.size.x * CAR_MODEL_SCALE + 0.15,
+            1.3,
+            model_aabb.size.z * CAR_MODEL_SCALE + 0.25)
+        car_body.position = Vector3(0, 0.65, mid_z)
     else:
         car_box.size = Vector3(1.9, 1.5, 4.35)
         car_body.position = Vector3(0, 0.85, 0)
     car_body.shape = car_box
     car.add_child(car_body)
+    # v0.4.2: the shape is disabled while the player drives this car
+    # (the player capsule is the collision then — otherwise the driver
+    # collides with his own car). Kept as metadata for gameplay.gd.
+    car.set_meta("collision_shape", car_body)
 
     var body := StandardMaterial3D.new()
     body.albedo_color = paint
@@ -1039,19 +1139,50 @@ func _create_car(pos: Vector3, paint: Color, angle: float, model_idx: int = -1) 
 
     var head_mat := _glow_mat(Color(1.0, 0.95, 0.8), 4.0)
     var tail_mat := _glow_mat(Color(1.0, 0.1, 0.1), 2.5)
+    # v0.4.2: lights + mirrors sit on the REAL car ends (derived from
+    # the model AABB above). The old fixed z = +/-2.17 floated up to
+    # 0.9 m in front of the shorter GLB cars.
+    var light_y := clampf(top_y * 0.45, 0.4, 0.75)
+    var mirror_y := clampf(top_y * 0.62, 0.55, 1.0)
     for side in [-1.0, 1.0]:
-        _car_box(car, Vector3(0.4, 0.12, 0.06), Vector3(side * 0.62, 0.72, -2.17), head_mat)
-        _car_box(car, Vector3(0.4, 0.1, 0.06), Vector3(side * 0.62, 0.74, 2.17), tail_mat)
-        _car_box(car, Vector3(0.12, 0.1, 0.2), Vector3(side * 0.96, 1.0, -0.55), body)
+        _car_box(car, Vector3(0.4, 0.12, 0.06), Vector3(side * half_w * 0.55, light_y, front_z - 0.03), head_mat)
+        _car_box(car, Vector3(0.4, 0.1, 0.06), Vector3(side * half_w * 0.55, light_y + 0.02, rear_z + 0.03), tail_mat)
+        _car_box(car, Vector3(0.12, 0.1, 0.2), Vector3(side * (half_w + 0.06), mirror_y, front_z * 0.45), body)
+
+    # v0.4.2: red/blue siren light bar on the police car roof (the
+    # Kenney police light bar is painted into the body texture, so the
+    # flashing needs its own emissive boxes). Pulsed by _process while
+    # the player drives with the siren on.
+    if model != null and model_idx % CAR_MODELS.size() == 2:
+        # Dedicated materials (NOT via _glow_mat: those are registered
+        # in glow_materials and night_glow would overwrite the pulse
+        # every 0.3 s). Emission starts at 0 — the siren pulse below
+        # drives them, and only while the player drives with siren on.
+        siren_red_mat = StandardMaterial3D.new()
+        siren_red_mat.albedo_color = Color(0.45, 0.04, 0.04)
+        siren_red_mat.emission_enabled = true
+        siren_red_mat.emission = Color(1.0, 0.08, 0.08)
+        siren_red_mat.emission_energy_multiplier = 0.0
+        siren_blue_mat = StandardMaterial3D.new()
+        siren_blue_mat.albedo_color = Color(0.04, 0.1, 0.45)
+        siren_blue_mat.emission_enabled = true
+        siren_blue_mat.emission = Color(0.1, 0.25, 1.0)
+        siren_blue_mat.emission_energy_multiplier = 0.0
+        _car_box(car, Vector3(0.38, 0.1, 0.34), Vector3(-0.26, top_y + 0.06, 0.15), siren_red_mat)
+        _car_box(car, Vector3(0.38, 0.1, 0.34), Vector3(0.26, top_y + 0.06, 0.15), siren_blue_mat)
 
     var spot := SpotLight3D.new()
-    spot.position = Vector3(0, 0.75, -2.2)
+    spot.position = Vector3(0, light_y, front_z - 0.15)
     spot.rotation_degrees = Vector3(-4, 0, 0)
     spot.spot_range = 18.0
     spot.spot_angle = 30.0
     spot.light_color = Color(1.0, 0.92, 0.75)
     spot.light_energy = 0.0
     spot.visible = false
+    # v0.4.2: only the sun ever casts shadows. A shadow-casting light
+    # whose visibility toggles at the night transition is a prime
+    # suspect for the on-device freeze (mobile GPU state rebuild).
+    spot.shadow_enabled = false
     spot.add_to_group("car_headlight")
     car.add_child(spot)
     return car
@@ -1488,14 +1619,58 @@ func _create_street_signs() -> void:
         pole.add_child(l)
 
 # ===== v0.3: criminals at night =====
+# v0.4.2: while the player drives the police car, the car follows the
+# player node (the player capsule is the collision — the car's own
+# shape is disabled while driving, see gameplay._enter_car).
+func _update_driven_car() -> void:
+    var pl := get_node_or_null("Player") as Node3D
+    if pl == null or police_car == null or not is_instance_valid(police_car):
+        return
+    if not (pl.get("driving") == true):
+        return
+    police_car.global_position = Vector3(pl.global_position.x, 0.02, pl.global_position.z)
+    police_car.rotation.y = pl.rotation.y
+
+# v0.4.2: red/blue siren flash on the driven police car roof. Only
+# writes the materials when the phase changes (once per ~0.35 s).
+var _siren_last := -2
+
+func _update_siren() -> void:
+    if siren_red_mat == null or siren_blue_mat == null:
+        return
+    var pl := get_node_or_null("Player")
+    var on: bool = pl != null and pl.get("driving") == true and pl.get("siren_on") == true
+    var phase := -1 if not on else int(Time.get_ticks_msec() / 350) % 2
+    if phase == _siren_last:
+        return
+    _siren_last = phase
+    if phase < 0:
+        siren_red_mat.emission_energy_multiplier = 0.0
+        siren_blue_mat.emission_energy_multiplier = 0.0
+    elif phase == 0:
+        siren_red_mat.emission_energy_multiplier = 5.0
+        siren_blue_mat.emission_energy_multiplier = 0.0
+    else:
+        siren_red_mat.emission_energy_multiplier = 0.0
+        siren_blue_mat.emission_energy_multiplier = 5.0
+
 func _update_night_criminals() -> void:
     var dn := get_node_or_null("DayNight")
     var night := false
     if dn != null and dn.has_method("is_night"):
         night = dn.is_night()
+    # v0.4.2 STAGGER: drain one queued marker flip per frame (below).
+    if not night_transition_queue.is_empty():
+        var qk: int = night_transition_queue.pop_front()
+        if qk >= 0 and qk < criminal_markers.size():
+            criminal_markers[qk].visible = night_transition_target
+            print("[NIGHT] step marker %d visible=%s" % [qk, night_transition_target])
+        if night_transition_queue.is_empty():
+            print("[NIGHT] transition complete night=%s" % night_transition_target)
     if night == criminal_active:
         return
     criminal_active = night
+    print("[NIGHT] transition start night=%s" % night)
     if night:
         criminal_saved_speeds.clear()
         for k in range(criminal_indices.size()):
@@ -1507,8 +1682,11 @@ func _update_night_criminals() -> void:
             criminal_saved_speeds.append(citizen_speeds[ci])
             if not criminal_caught[k]:
                 citizen_speeds[ci] = 3.0
-                if k < criminal_markers.size():
-                    criminal_markers[k].visible = true
+        # Markers flip one per frame (staggered), not all at once.
+        night_transition_target = true
+        for k in range(criminal_indices.size()):
+            if k < criminal_markers.size() and not criminal_caught[k]:
+                night_transition_queue.append(k)
     else:
         for k in range(criminal_indices.size()):
             var ci: int = criminal_indices[k]
@@ -1516,8 +1694,10 @@ func _update_night_criminals() -> void:
                 continue
             if k < criminal_saved_speeds.size():
                 citizen_speeds[ci] = criminal_saved_speeds[k]
+        night_transition_target = false
+        for k in range(criminal_indices.size()):
             if k < criminal_markers.size():
-                criminal_markers[k].visible = false
+                night_transition_queue.append(k)
 
 func arrest_criminal(index: int) -> bool:
     var k := criminal_indices.find(index)
@@ -1602,6 +1782,7 @@ func _start_prayer(pi: int) -> void:
     prayer_active = true
     prayer_timer = 20.0
     prayer_last_index = pi
+    print("[PRAYER] start idx=%d" % pi)
     prayer_saved_routes.clear()
     prayer_saved_waits.clear()
     for i in range(citizens.size()):
@@ -1625,6 +1806,7 @@ func _start_prayer(pi: int) -> void:
 
 func _end_prayer() -> void:
     prayer_active = false
+    print("[PRAYER] end")
     for i in range(citizens.size()):
         if i < prayer_saved_routes.size():
             citizen_routes[i] = prayer_saved_routes[i]

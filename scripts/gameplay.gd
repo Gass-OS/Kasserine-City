@@ -43,7 +43,20 @@ var radio_button: Button
 # v0.4.1: police.mp3 is 44.88 s long and v0.4 played the WHOLE file per
 # chatter line, every 20-40 s — the radio was nearly continuous. Each
 # chatter now plays only a short burst, auto-stopped by this timer.
-const RADIO_BURST_SECONDS := 5.5
+# v0.4.2: measured the actual waveform (ffmpeg, VM): the file starts
+# with 2.5 s of DEAD AIR, then one long transmission (2.5-44 s) whose
+# first natural phrase gap is at 13.3-14.3 s (a full second of near
+# silence). The old 5.5 s burst (from 0.0) played 2.5 s of silence +
+# 3 s of speech and cut mid-word — "cut off after one word". The burst
+# now starts at 2.5 s and runs 10.8 s to the 13.3 s gap, covering two
+# complete phrases, with a 0.8 s fade-out instead of a hard cut.
+const RADIO_BURST_START := 2.5
+const RADIO_BURST_SECONDS := 10.8
+const RADIO_BURST_FADE := 0.8
+# v0.4.2: the file itself is mastered hot (peak 2.16 — clipped at the
+# source). -9 dB keeps the output under full scale instead of clipping
+# the phone DAC on top of it. Was -6 dB.
+const RADIO_VOLUME_DB := -9.0
 var radio_burst_left := 0.0
 # v0.4 (C): story chapter cards (new officer's first week).
 var story_panel: PanelContainer
@@ -165,12 +178,13 @@ func _create_radio() -> void:
     blip_player.play()
     blip_playback = blip_player.get_stream_playback() as AudioStreamGeneratorPlayback
 
-    # v0.3.1: dedicated player for police.mp3 (-6 dB, no loop). The
-    # stream is loaded lazily on the first radio sound — no file exists
-    # in the VM, and a missing file is normal (blip fallback).
+    # v0.3.1: dedicated player for police.mp3 (-9 dB, no loop — see
+    # RADIO_VOLUME_DB: the file is mastered hot and clips at -6 dB).
+    # The stream is loaded lazily on the first radio sound — no file
+    # exists in the VM, and a missing file is normal (blip fallback).
     radio_sound_player = AudioStreamPlayer.new()
     radio_sound_player.name = "RadioSoundPlayer"
-    radio_sound_player.volume_db = -6.0
+    radio_sound_player.volume_db = RADIO_VOLUME_DB
     add_child(radio_sound_player)
 
     # UI click: one short 1600 Hz tick, loud enough to hear on a tap.
@@ -247,6 +261,54 @@ func _show_story_card(flag: String, title_key: String, body_key: String) -> void
     story_panel.visible = true
     get_tree().paused = true
 
+# v0.4.2: driving the police car. The player node itself drives (its
+# capsule is the collision) and the car mesh follows it — see
+# world._update_driven_car. The car's own shape is disabled while
+# driving, or the driver would collide with his own car.
+func _enter_car() -> void:
+    if world.police_car == null or player == null:
+        return
+    # Snap the player into the driver's seat so the car does not jump
+    # to the player (the player may be up to 4.5 m away when pressing
+    # USE).
+    player.global_position = world.police_car.global_position + Vector3(0, 0.1, 0)
+    var shape = world.police_car.get_meta("collision_shape") as CollisionShape3D
+    if shape != null:
+        shape.disabled = true
+    player.driving = true
+    player.siren_on = false
+    player.drive_prev_first_person = player.first_person
+    if player.first_person:
+        player.first_person = false
+        player._apply_camera_mode()
+    if player.player_model != null:
+        player.player_model.visible = false
+    if player.hud != null:
+        player.hud.queue_redraw()
+    _notice(Settings.t("drive_enter"))
+    _speak("Police car. Let's patrol.")
+
+func _exit_car() -> void:
+    if world.police_car == null or player == null:
+        return
+    var shape = world.police_car.get_meta("collision_shape") as CollisionShape3D
+    if shape != null:
+        shape.disabled = false
+    player.driving = false
+    player.siren_on = false
+    # Step out to the car's right side, on foot (2.2 m clears the car
+    # box, whose half-width is ~1.24 m).
+    var side: Vector3 = player.global_transform.basis.x.normalized()
+    player.global_position = world.police_car.global_position + side * 2.2 + Vector3(0, 0.1, 0)
+    if player.player_model != null:
+        player.player_model.visible = true
+    if player.drive_prev_first_person:
+        player.first_person = true
+        player._apply_camera_mode()
+    if player.hud != null:
+        player.hud.queue_redraw()
+    _notice(Settings.t("drive_exit"))
+
 func _update_story() -> void:
     # One card per chapter, in story order. The intro film (if playing)
     # and the pause menu take precedence — the card waits its turn.
@@ -320,6 +382,8 @@ func _load_police_stream() -> AudioStreamMP3:
 # (0.07 s at 1250 Hz, then 0.07 s at 950 Hz).
 # v0.4.1: the mp3 plays as a SHORT BURST (RADIO_BURST_SECONDS) — the
 # file is 45 s long and v0.4 played it whole per chatter line.
+# v0.4.2: the burst starts at RADIO_BURST_START (skips the 2.5 s of
+# dead air) and ends at the 13.3 s natural phrase gap.
 func _play_radio_sound() -> void:
     if police_stream == null:
         police_stream = _load_police_stream()
@@ -327,7 +391,8 @@ func _play_radio_sound() -> void:
         if radio_sound_player.playing:
             radio_sound_player.stop()
         radio_sound_player.stream = police_stream
-        radio_sound_player.play()
+        radio_sound_player.volume_db = RADIO_VOLUME_DB
+        radio_sound_player.play(RADIO_BURST_START)
         radio_burst_left = RADIO_BURST_SECONDS
         return
     if blip_playback != null:
@@ -564,6 +629,15 @@ func _add_speech_bubbles_old():
         speech_bubbles.append(bubble)
 
 func interact():
+    # v0.4.2: drivable police car — USE near it to get in, USE again
+    # to get out. Takes priority over talking/arresting while driving.
+    if player.driving:
+        _exit_car()
+        return
+    if world.police_car != null and is_instance_valid(world.police_car):
+        if player.global_position.distance_to(world.police_car.global_position) < 4.5:
+            _enter_car()
+            return
     var nearest: Node3D = null
     var nearest_distance := 999.0
     var nearest_index := -1
@@ -627,10 +701,17 @@ func _process(delta):
             _radio_push_line()
     # v0.4.1: stop the mp3 burst after RADIO_BURST_SECONDS — the file
     # is 45 s and must never play through on a single chatter line.
+    # v0.4.2: fade the volume out over the last RADIO_BURST_FADE
+    # seconds instead of cutting mid-word.
     if radio_burst_left > 0.0:
         radio_burst_left -= delta
-        if radio_burst_left <= 0.0 and radio_sound_player != null and radio_sound_player.playing:
-            radio_sound_player.stop()
+        if radio_sound_player != null and radio_sound_player.playing:
+            if radio_burst_left <= RADIO_BURST_FADE:
+                var f := clampf(radio_burst_left / RADIO_BURST_FADE, 0.0, 1.0)
+                radio_sound_player.volume_db = lerpf(-40.0, RADIO_VOLUME_DB, f)
+            if radio_burst_left <= 0.0:
+                radio_sound_player.stop()
+                radio_sound_player.volume_db = RADIO_VOLUME_DB
     # Push the two-tone blip frames (1250 Hz, then 950 Hz).
     if blip_frames_left > 0 and blip_playback != null:
         var avail := blip_playback.get_frames_available()

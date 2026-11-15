@@ -44,6 +44,11 @@ func _setup() -> void:
 	sun.shadow_enabled = Settings.quality >= 1
 	moon = DirectionalLight3D.new()
 	moon.light_color = Color(0.55, 0.65, 1.0)
+	# v0.4.2: only the sun ever casts shadows. The moon's shadow flag
+	# is set off explicitly (it defaults off, but a shadow-casting
+	# light appearing at the night transition would be another
+	# render-state change in the same frame as everything else).
+	moon.shadow_enabled = false
 	root.add_child(moon)
 	var layer := CanvasLayer.new()
 	add_child(layer)
@@ -83,7 +88,13 @@ func _process(delta: float) -> void:
 	# v0.4.1: sun 1.3 -> 1.15 (part of the building blow-out fix).
 	sun.light_energy = day * 1.15
 	sun.light_color = Color(1, 1, 1).lerp(Color(1.0, 0.6, 0.35), warm)
-	sun.visible = day > 0.01
+	# v0.4.2 FREEZE FIX: the sun's visibility was toggled off every
+	# night (day <= 0.01) and back on at dawn. Toggling a shadow-casting
+	# directional light rebuilds the shadow state on the mobile GPU —
+	# the prime suspect for the on-device freeze, which hangs the app
+	# (no force-close, no GDScript error) at the transition. The sun
+	# now stays visible forever; its energy fades smoothly to 0 at
+	# night, so the render state never switches.
 	moon.rotation_degrees = Vector3(-(t - 0.25) * 360.0 + 180.0, -35.0, 0.0)
 	# v0.4.1 NIGHT FIX: the old night floor was effectively black on a
 	# phone screen — moon 0.3, ambient 0.5 at (0.08,0.1,0.2), sky top

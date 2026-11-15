@@ -3,7 +3,20 @@ extends CharacterBody3D
 const SPEED = 6.0
 const SPRINT_SPEED = 10.0
 const JUMP_SPEED = 4.5
+# v0.4.2: driving the police car (arcade: joystick steers, RUN boosts).
+const DRIVE_SPEED = 12.0
+const DRIVE_BOOST_SPEED = 18.0
+const DRIVE_REVERSE_SPEED = 5.0
 var look_sensitivity := 0.008
+# v0.4.2: driving state (set by gameplay._enter_car / _exit_car).
+var driving := false
+var siren_on := false
+var drive_prev_first_person := false
+var siren_player: AudioStreamPlayer
+var siren_playback: AudioStreamGeneratorPlayback
+var siren_phase := 0.0
+var siren_tone := 0
+var siren_time := 0.0
 
 var yaw := 0.0
 var pitch := -0.22
@@ -34,6 +47,7 @@ var click_phase := 0.0
 class TouchHUD extends Control:
     var joystick_vector := Vector2.ZERO
     var mode_label := "3RD"
+    var player_ref: Node = null
     func _notification(what):
         if what == NOTIFICATION_RESIZED:
             queue_redraw()
@@ -45,6 +59,8 @@ class TouchHUD extends Control:
         var sprint = Vector2(s.x - 196, s.y - 140)
         var interact = Vector2(s.x - 78, s.y - 252)
         var cam = Vector2(s.x - 78, s.y - 364)
+        var driving_now: bool = player_ref != null and player_ref.get("driving") == true
+        var siren_now: bool = player_ref != null and player_ref.get("siren_on") == true
 
         draw_circle(joy, 78, Color(0.03, 0.06, 0.10, 0.48))
         draw_arc(joy, 78, 0.0, TAU, 48, Color(0.85, 0.91, 1.0, 0.8), 4.0)
@@ -53,8 +69,13 @@ class TouchHUD extends Control:
 
         _button(jump, 48, "JUMP", Color(0.15, 0.65, 0.34, 0.82))
         _button(sprint, 44, "RUN", Color(0.14, 0.42, 0.78, 0.82))
-        _button(interact, 44, "USE", Color(0.80, 0.48, 0.12, 0.85))
-        _button(cam, 44, mode_label, Color(0.45, 0.35, 0.65, 0.85))
+        # v0.4.2: while driving, USE becomes EXIT (get out of the car)
+        # and the camera button becomes the SIREN toggle.
+        _button(interact, 44, "EXIT" if driving_now else "USE", Color(0.80, 0.48, 0.12, 0.85))
+        if driving_now:
+            _button(cam, 44, "SIREN", Color(0.75, 0.15, 0.25, 0.85) if siren_now else Color(0.45, 0.35, 0.65, 0.85))
+        else:
+            _button(cam, 44, mode_label, Color(0.45, 0.35, 0.65, 0.85))
 
     func _button(p: Vector2, r: float, label: String, color: Color):
         draw_circle(p, r, Color(0.02, 0.04, 0.07, 0.45))
@@ -113,6 +134,7 @@ func _ready():
     hud = TouchHUD.new()
     hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    hud.player_ref = self
     hud_layer.add_child(hud)
 
     status_label = Label.new()
@@ -136,6 +158,27 @@ func _ready():
     # playback is null ("Player is inactive") and the click never sounds.
     click_player.play()
     click_playback = click_player.get_stream_playback() as AudioStreamGeneratorPlayback
+
+    # v0.4.2: police siren — two-tone wail (700 / 950 Hz), generated
+    # like the click player. Frames are pushed in _process only while
+    # the siren is on; otherwise the player runs silent.
+    var sgen := AudioStreamGenerator.new()
+    sgen.mix_rate = 22050
+    sgen.buffer_length = 0.2
+    siren_player = AudioStreamPlayer.new()
+    siren_player.stream = sgen
+    siren_player.volume_db = -8.0
+    add_child(siren_player)
+    siren_player.play()
+    siren_playback = siren_player.get_stream_playback() as AudioStreamGeneratorPlayback
+
+func toggle_siren() -> void:
+    if not driving:
+        return
+    siren_on = not siren_on
+    _play_click()
+    if hud != null:
+        hud.queue_redraw()
 
 func _play_click() -> void:
     if click_playback != null:
@@ -215,8 +258,12 @@ func _input(event):
                 get_parent().interact()
             elif camera_touch == -1 and _near(event.position, _point("camera"), 52):
                 camera_touch = event.index
-                _play_click()
-                toggle_camera()
+                # v0.4.2: while driving this button is SIREN, not camera.
+                if driving:
+                    toggle_siren()
+                else:
+                    _play_click()
+                    toggle_camera()
             elif move_touch == -1 and _near(event.position, _point("move"), 96):
                 move_touch = event.index
                 move_origin = event.position
@@ -276,6 +323,19 @@ func _process(delta):
             click_playback.push_frame(Vector2(s, s))
             click_phase += 1.0
         click_frames_left -= n
+    # v0.4.2: police siren — two-tone wail while driving with siren on.
+    if siren_on and siren_playback != null:
+        var savail := siren_playback.get_frames_available()
+        var sn := mini(savail, 1024)
+        for i in range(sn):
+            siren_phase += 1.0 / 22050.0
+            if siren_phase >= 0.45:
+                siren_phase = 0.0
+                siren_tone = 1 - siren_tone
+            var sf := 700.0 if siren_tone == 0 else 950.0
+            var ss := sin(TAU * sf * siren_time / 22050.0) * 0.5
+            siren_playback.push_frame(Vector2(ss, ss))
+            siren_time += 1.0
 
 func _physics_process(delta):
     if not is_on_floor():
@@ -303,8 +363,19 @@ func _physics_process(delta):
     var direction = (right * input_dir.x - forward * input_dir.y).normalized()
 
     var current_speed = SPRINT_SPEED if sprint_touch != -1 else SPEED
+    # v0.4.2: driving speeds — the police car is faster than running,
+    # RUN is the boost, joystick down reverses. No strafing: a car only
+    # moves along its forward/back axis.
+    if driving:
+        var fwd: float = -input_dir.y
+        if fwd > 0.05:
+            current_speed = DRIVE_BOOST_SPEED if sprint_touch != -1 else DRIVE_SPEED
+        elif fwd < -0.05:
+            current_speed = DRIVE_REVERSE_SPEED
+        else:
+            current_speed = 0.0
 
-    if direction.length() > 0.01:
+    if direction.length() > 0.01 and current_speed > 0.0:
         velocity.x = direction.x * current_speed
         velocity.z = direction.z * current_speed
         if first_person:
@@ -321,7 +392,8 @@ func _physics_process(delta):
             rotation.y = yaw
             camera_pivot.rotation.y = 0.0
 
-    if (jump_requested or Input.is_key_pressed(KEY_SPACE)) and is_on_floor():
+    # v0.4.2: no jumping while driving.
+    if not driving and (jump_requested or Input.is_key_pressed(KEY_SPACE)) and is_on_floor():
         velocity.y = JUMP_SPEED
     jump_requested = false
 

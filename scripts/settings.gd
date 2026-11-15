@@ -64,6 +64,12 @@ const STR := {
 	"adhan_missing": {"en": "Adhan: file missing — no adhan.mp3 found.", "fr": "Adhan : fichier manquant — adhan.mp3 introuvable.", "ar": "الأذان: الملف مفقود — لم يتم العثور على adhan.mp3."},
 	"radio_ok": {"en": "Radio: OK — file found, playing now.", "fr": "Radio : OK — fichier trouvé, en cours de lecture.", "ar": "الراديو: يعمل — تم العثور على الملف، يتم تشغيله الآن."},
 	"radio_missing": {"en": "Radio: file missing — using the blip.", "fr": "Radio : fichier manquant — bip utilisé.", "ar": "الراديو: الملف مفقود — يتم استخدام الصوت البديل."},
+	# v0.4.2: drivable police car.
+	"drive_enter": {"en": "Driving the police car — joystick to drive, RUN to boost, USE to get out, SIREN for lights + sound.", "fr": "Tu conduis la voiture de police — joystick pour rouler, RUN pour accélérer, USE pour sortir, SIREN pour gyrophares + sirène.", "ar": "أنت تقود سيارة الشرطة — استخدم عصا التحكم للقيادة، RUN للسرعة، USE للخروج، SIREN للأضواء والصوت."},
+	"drive_exit": {"en": "Out of the car — on foot again.", "fr": "Sorti de la voiture — à pied de nouveau.", "ar": "خرجت من السيارة — عدت إلى المشي."},
+	"drive_hint": {"en": "Police car — press USE to drive it!", "fr": "Voiture de police — appuie sur USE pour la conduire !", "ar": "سيارة الشرطة — اضغط USE لقيادتها!"},
+	"siren_on": {"en": "Siren on!", "fr": "Sirène allumée !", "ar": "الصفارة تعمل!"},
+	"siren_off": {"en": "Siren off.", "fr": "Sirène éteinte.", "ar": "الصفارة متوقفة."},
 }
 
 func _ready() -> void:
