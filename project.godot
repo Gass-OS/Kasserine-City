@@ -6,6 +6,13 @@ config/description="A native 3D open-world game inspired by Kasserine, Tunisia."
 config/icon="res://icon.png"
 run/main_scene="res://menu.tscn"
 config/features=PackedStringArray("4.4", "GL Compatibility")
+# v0.4.4 BACK FIX: Quit On Go Back defaults to true — pressing Android
+# back then quits the app even when a node handles
+# NOTIFICATION_WM_GO_BACK_REQUEST (the engine queues the quit first).
+# That is why back from Settings closed the APK instead of returning
+# to the menu. Off: back is now purely navigation, handled by
+# menu.gd / gameplay.gd; quitting stays on the QUIT / EXIT buttons.
+config/quit_on_go_back=false
 
 [display]
 window/size/viewport_width=1280

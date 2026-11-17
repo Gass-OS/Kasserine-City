@@ -15,6 +15,11 @@ const LAMP_LIGHT_ENERGY := 2.2
 const LAMP_LIGHT_RANGE := 14.0
 var lamp_lights: Array[OmniLight3D] = []
 var lamp_logged := false
+# v0.4.4: the window/glow materials are only rewritten when `night`
+# actually moved. Before, they were rewritten every 0.3 s even with a
+# perfectly steady day (night = 0) — hundreds of redundant material
+# writes a minute on the render server for zero visual change.
+var _last_night_applied := -1.0
 
 func _ready() -> void:
     world = get_parent()
@@ -45,7 +50,13 @@ func _process(delta: float) -> void:
     var day := clampf(sin((t - 0.25) * TAU) * 2.5 + 0.35, 0.0, 1.0)
     night = 1.0 - day
     var mats = world.get("glow_materials")
-    if mats != null:
+    # v0.4.4: only touch the materials when `night` actually moved —
+    # a steady day (night = 0) used to rewrite every window material
+    # every 0.3 s for nothing. Headlights / lamps below still update
+    # every tick (they follow the player), only the material loop is
+    # guarded.
+    if mats != null and absf(night - _last_night_applied) > 0.001:
+        _last_night_applied = night
         for m in mats:
             # v0.4.1: harden — a freed material must never kill the frame.
             if m == null or not is_instance_valid(m):

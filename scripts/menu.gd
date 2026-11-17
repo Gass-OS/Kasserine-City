@@ -19,8 +19,14 @@ var boot_tap: Label
 var boot_title: Label
 # v0.4 (A): on-device MP3 test result label (settings screen).
 var test_label: Label
+# v0.4.4 BACK FIX: one press can arrive through TWO paths (the
+# NOTIFICATION_WM_GO_BACK_REQUEST notification AND the ui_cancel key
+# event). The 300 ms guard makes a double delivery act as one press.
+var _last_back_msec := -10000
 
 func _ready() -> void:
+	# v0.4.4: belt with the project setting — back must never quit.
+	get_tree().quit_on_go_back = false
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	rng.seed = 7
 	var x := 0.0
@@ -55,18 +61,35 @@ func _click_then(cb: Callable) -> void:
 	_play_click()
 	cb.call()
 
+func _handle_back() -> void:
+	# Single choke point for the Android back button, whichever path
+	# delivered it (notification or ui_cancel key event — see _input).
+	# The 300 ms guard stops one physical press from firing twice.
+	var now := Time.get_ticks_msec()
+	if now - _last_back_msec < 300:
+		return
+	_last_back_msec = now
+	if screen == "boot":
+		_show_main()
+	elif screen == "quit" or screen == "settings":
+		_show_main()
+	else:
+		_show_quit_confirm()
+
 func _notification(what: int) -> void:
 	# Android back button: never quit at once. On the main menu it opens
 	# the quit confirmation; on settings / confirm it goes back one step.
 	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
-		if screen == "boot":
-			_show_main()
-		elif screen == "quit" or screen == "settings":
-			_show_main()
-		else:
-			_show_quit_confirm()
+		_handle_back()
 
 func _input(event: InputEvent) -> void:
+	# v0.4.4: Android back ALSO arrives as the ui_cancel key event
+	# (KEY_ESCAPE). On Aymen's phone the notification path alone did
+	# not return from Settings — handle both, deduped in _handle_back.
+	if event.is_action_pressed("ui_cancel"):
+		_handle_back()
+		get_viewport().set_input_as_handled()
+		return
 	# v0.4 (B): the boot screen is a tap-to-start screen. A tap during
 	# the fill jumps the bar to full; a tap after that enters the menu.
 	if screen != "boot":
@@ -232,11 +255,34 @@ func _show_main() -> void:
 	v.add_child(title)
 	v.add_child(_label(Settings.t("subtitle"), 22, Color(0.85, 0.9, 1.0)))
 	v.add_child(Control.new())
+	# v0.4.4: start-time choice — Day (09:36), Night (20:24) or
+	# Prayer (12:30, the adhan plays right at the start). Persisted
+	# in Settings; DayNight reads it at setup and the old fixed
+	# 07:40 start never overrides it. The ✓ marks the saved choice.
+	v.add_child(_label(Settings.t("start_at"), 22, Color(0.85, 0.9, 1.0)))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	v.add_child(row)
+	var opts := [["☀️ Jour", 0], ["🌙 Nuit", 1], ["🕌 Prière", 2]]
+	for o in opts:
+		var b := Button.new()
+		b.text = ("✓ " if Settings.start_time_mode == int(o[1]) else "") + String(o[0])
+		b.custom_minimum_size = Vector2(0, 56)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.add_theme_font_size_override("font_size", 20)
+		b.pressed.connect(_click_then.bind(_set_start_mode.bind(int(o[1]))))
+		row.add_child(b)
 	v.add_child(_button(Settings.t("play"), _on_play))
 	v.add_child(_button(Settings.t("settings"), _show_settings))
 	v.add_child(_button(Settings.t("quit"), _show_quit_confirm))
 	v.modulate.a = 0.0
 	create_tween().tween_property(v, "modulate:a", 1.0, 0.8)
+
+func _set_start_mode(m: int) -> void:
+	Settings.start_time_mode = m
+	Settings.save_settings()
+	_show_main.call_deferred()
 
 func _show_quit_confirm() -> void:
 	screen = "quit"

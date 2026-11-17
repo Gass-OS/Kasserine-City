@@ -164,6 +164,11 @@ var intro_playing := false
 # v0.4 (G): weather — 0 clear, 1 cloudy, 2 rain. Changes on a timer.
 var weather := 0
 var weather_timer := 90.0
+# v0.4.4: manual weather override (diagnostic). While set, the auto
+# timer is parked at 600 s so it cannot override the choice right
+# away; the storm flag means frequent lightning (Orage).
+var weather_manual := false
+var weather_storm := false
 var weather_dark := 0.0
 var lightning_flash := 0.0
 var lightning_timer := 12.0
@@ -757,9 +762,32 @@ func _apply_weather() -> void:
     if ca != null and ca.has_method("set_rain"):
         ca.set_rain(weather == 2)
 
+func set_weather_manual(w: int, storm: bool) -> void:
+    # v0.4.4: manual weather control from the HUD button. Sets the
+    # weather immediately through the existing system (_apply_weather
+    # drives weather_dark, rain particles and rain audio), then parks
+    # the auto timer at 600 s so the choice sticks. Orage = rain +
+    # an immediate lightning flash + thunder, then frequent lightning
+    # while it lasts. When the timer finally rolls, manual mode ends.
+    weather = w
+    weather_storm = storm
+    weather_manual = true
+    weather_timer = 600.0
+    _apply_weather()
+    if storm:
+        lightning_flash = 1.0
+        lightning_timer = 3.0
+        var ca := get_node_or_null("CityAudio")
+        if ca != null and ca.has_method("play_thunder"):
+            ca.play_thunder()
+    print("[WEATHER] manual -> %d storm=%s (holds 600 s)" % [w, str(storm)])
+
 func _update_weather(delta: float) -> void:
     weather_timer -= delta
     if weather_timer <= 0.0:
+        # v0.4.4: a manual choice ending here also clears the storm.
+        weather_manual = false
+        weather_storm = false
         var roll := randf()
         if roll < 0.5:
             weather = 0
@@ -778,7 +806,8 @@ func _update_weather(delta: float) -> void:
     if weather == 2:
         lightning_timer -= delta
         if lightning_timer <= 0.0:
-            lightning_timer = randf_range(8.0, 20.0)
+            # v0.4.4: frequent lightning while a manual Orage lasts.
+            lightning_timer = randf_range(3.0, 8.0) if weather_storm else randf_range(8.0, 20.0)
             lightning_flash = 1.0
             var ca := get_node_or_null("CityAudio")
             if ca != null and ca.has_method("play_thunder"):
@@ -800,9 +829,45 @@ func _process(delta):
         var pl := get_node_or_null("Player") as Node3D
         var t: float = float(dn.get("t")) if dn != null else -1.0
         var m: int = int(gp.get("mission")) if gp != null else -1
-        var db: bool = bool(dlg.get("busy")) if dlg != null else false
+        # v0.4.4 FREEZE FORENSICS: the last [HB] before a freeze must
+        # name the state of EVERY timed suspect at that moment — the
+        # v0.4.3 line only had weather + dlg_busy. Weather + its
+        # timer (first change fires at 90 s), radio power + burst,
+        # dialogue busy + its timer, nearest citizen distance, night
+        # value, glow material count, visible dialogue bubbles.
+        var dlg_busy := false
+        var dlg_timer := -1.0
+        if dlg != null:
+            dlg_busy = bool(dlg.get("busy"))
+            var dtv = dlg.get("timer")
+            if dtv != null:
+                dlg_timer = float(dtv)
+        var radio_on := false
+        var radio_burst := 0.0
+        if gp != null:
+            radio_on = bool(gp.get("radio_on"))
+            var rb = gp.get("radio_burst_left")
+            if rb != null:
+                radio_burst = float(rb)
+        var nearest_cit := 999.0
+        if pl != null:
+            for c in citizens:
+                var d: float = (c as Node3D).global_position.distance_to(pl.global_position)
+                if d < nearest_cit:
+                    nearest_cit = d
+        var night_v := -1.0
+        if dn != null:
+            night_v = 1.0 - clampf(sin((t - 0.25) * TAU) * 2.5 + 0.35, 0.0, 1.0)
+        var bub := 0
+        if dlg != null:
+            var bb = dlg.get("bubbles")
+            if bb != null:
+                for k in (bb as Dictionary).values():
+                    if k != null and is_instance_valid(k) and (k as Node3D).visible:
+                        bub += 1
+        var db: bool = dlg_busy
         var pp := str(pl.global_position) if pl != null else "?"
-        print("[HB] t=%.3f clock=%.1f mission=%d weather=%d dlg_busy=%s pos=%s" % [t, city_clock, m, weather, str(db), pp])
+        print("[HB] t=%.3f clock=%.1f mission=%d weather=%d wt=%.0f radio=%s burst=%.1f dlg=%s dlgt=%.1f near=%.1f night=%.2f glow=%d bub=%d pos=%s" % [t, city_clock, m, weather, weather_timer, str(radio_on), radio_burst, str(db), dlg_timer, nearest_cit, night_v, glow_materials.size(), bub, pp])
     _update_night_criminals()
     _update_prayer(delta)
     _update_weather(delta)

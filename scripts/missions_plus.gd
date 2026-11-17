@@ -21,6 +21,10 @@ var coins := 0
 var marker: MeshInstance3D
 var coin_label: Label
 var acc := 0.0
+# v0.4.4: only assign the objective text when it actually changed —
+# standing still re-assigned the identical "… (N m)" string every
+# 0.25 s forever. One-time texts (mission complete) bypass the cache.
+var _last_objective_text := ""
 
 func _ready() -> void:
     await get_tree().process_frame
@@ -100,15 +104,19 @@ func _process(delta: float) -> void:
     acc += delta
     if acc > 0.25:
         acc = 0.0
+        var obj := ""
         if is_wanted:
             if dist < 8.0:
-                gp.objective.text = "OBJECTIVE: MOST WANTED — " + Settings.t("wanted_hint")
+                obj = "OBJECTIVE: MOST WANTED — " + Settings.t("wanted_hint")
             else:
-                gp.objective.text = "OBJECTIVE: %s (%d m)" % [s["text"], int(dist)]
+                obj = "OBJECTIVE: %s (%d m)" % [s["text"], int(dist)]
         elif night_ok:
-            gp.objective.text = "OBJECTIVE: %s (%d m)" % [s["text"], int(dist)]
+            obj = "OBJECTIVE: %s (%d m)" % [s["text"], int(dist)]
         else:
-            gp.objective.text = "OBJECTIVE: Wait for night, then go to the Cafe (%d m)" % int(dist)
+            obj = "OBJECTIVE: Wait for night, then go to the Cafe (%d m)" % int(dist)
+        if obj != _last_objective_text:
+            _last_objective_text = obj
+            gp.objective.text = obj
     if is_wanted:
         return
     if dist < 7.0 and night_ok:

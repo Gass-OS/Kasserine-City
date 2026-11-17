@@ -12,9 +12,14 @@ var look_sensitivity := 1.0
 var day_length := 2400.0
 var first_person := false
 var intro_seen := false
+# v0.4.4: menu start-time choice — 0 = Day (t 0.4, 09:36), 1 = Night
+# (t 0.85, 20:24), 2 = Prayer (t 0.521, 12:30 Dhuhr, so the adhan
+# plays right at the start). Persisted like the other settings.
+var start_time_mode := 0
 
 const STR := {
 	"play": {"en": "Play", "fr": "Jouer", "ar": "ابدأ اللعب"},
+	"start_at": {"en": "Start at:", "fr": "Commencer :", "ar": "ابدأ في:"},
 	"settings": {"en": "Settings", "fr": "Réglages", "ar": "الإعدادات"},
 	"quit": {"en": "Quit", "fr": "Quitter", "ar": "خروج"},
 	"quit_confirm": {"en": "Quit the game?", "fr": "Quitter le jeu ?", "ar": "الخروج من اللعبة؟"},
@@ -91,6 +96,7 @@ func load_settings() -> void:
 	day_length = c.get_value("main", "day_length", day_length)
 	first_person = bool(c.get_value("main", "first_person", first_person))
 	intro_seen = bool(c.get_value("main", "intro_seen", intro_seen))
+	start_time_mode = int(c.get_value("main", "start_time_mode", start_time_mode))
 
 func save_settings() -> void:
 	var c := ConfigFile.new()
@@ -101,6 +107,7 @@ func save_settings() -> void:
 	c.set_value("main", "day_length", day_length)
 	c.set_value("main", "first_person", first_person)
 	c.set_value("main", "intro_seen", intro_seen)
+	c.set_value("main", "start_time_mode", start_time_mode)
 	c.save(PATH)
 
 func apply() -> void:

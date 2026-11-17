@@ -63,6 +63,25 @@ var story_panel: PanelContainer
 var story_title: Label
 var story_body: Label
 var story_shown := {}
+# v0.4.4: manual day/night switch (bottom-center HUD button).
+var daynight_button: Button
+var _daynight_is_night := false
+# v0.4.4: bottom-row radio + weather buttons (same row as day/night).
+var radio_bottom_button: Button
+var weather_button: Button
+var _weather_step := 0
+var _weather_sync_code := -1
+# v0.4.4: manual weather — cycles Clair -> Nuageux -> Pluie -> Orage.
+const WEATHER_STEPS := [
+	{"label": "🌦️ Clair", "w": 0, "storm": false},
+	{"label": "☁️ Nuageux", "w": 1, "storm": false},
+	{"label": "🌧️ Pluie", "w": 2, "storm": false},
+	{"label": "⛈️ Orage", "w": 2, "storm": true},
+]
+# v0.4.4 BACK FIX: one press can arrive through TWO paths (the
+# NOTIFICATION_WM_GO_BACK_REQUEST notification AND the ui_cancel key
+# event). The 300 ms guard makes a double delivery act as one press.
+var _last_back_msec := -10000
 
 const RADIO_LINES_EN = [
     "Unit 2, all clear at the market.",
@@ -124,6 +143,8 @@ func _ready():
     # Always process so the Android back button is caught even while the
     # game is paused by the pause menu.
     process_mode = Node.PROCESS_MODE_ALWAYS
+    # v0.4.4: belt with the project setting — back must never quit.
+    get_tree().quit_on_go_back = false
     world = get_parent()
     player = world.get_node("Player")
     player.look_sensitivity = 0.008 * Settings.look_sensitivity
@@ -406,8 +427,7 @@ func _toggle_radio() -> void:
     # shows and chatter runs every 20-40 s. OFF: no chatter, no radio
     # sounds, panel hidden. The button always shows the current state.
     radio_on = not radio_on
-    if radio_button != null:
-        radio_button.text = Settings.t("radio_on" if radio_on else "radio_off")
+    _sync_radio_buttons()
     radio_panel.visible = radio_on
     if radio_on:
         radio_timer = randf_range(20.0, 40.0)
@@ -427,6 +447,78 @@ func _toggle_radio() -> void:
         if blip_player != null and blip_player.playing:
             blip_player.stop()
         _notice(Settings.t("radio_stopped"))
+
+func _hud_button(text: String, w: float) -> Button:
+    # Small button for the bottom-center control row.
+    var b := Button.new()
+    b.text = text
+    b.custom_minimum_size = Vector2(w, 48)
+    b.add_theme_font_size_override("font_size", 20)
+    return b
+
+func _sync_radio_buttons() -> void:
+    # v0.4.4: the top-bar RADIO button and the bottom-row radio button
+    # show the SAME state — one setting, two buttons, never contradict.
+    var txt := Settings.t("radio_on" if radio_on else "radio_off")
+    if radio_button != null:
+        radio_button.text = txt
+    if radio_bottom_button != null:
+        radio_bottom_button.text = "📻 ON" if radio_on else "📻 OFF"
+
+func _update_weather_button() -> void:
+    if weather_button == null:
+        return
+    var s: Dictionary = WEATHER_STEPS[_weather_step]
+    weather_button.text = String(s["label"])
+
+func _step_for_weather(w: int, storm: bool) -> int:
+    if storm:
+        return 3
+    if w == 2:
+        return 2
+    if w == 1:
+        return 1
+    return 0
+
+func _cycle_weather() -> void:
+    # v0.4.4: manual weather, Clair -> Nuageux -> Pluie -> Orage.
+    # Sets the world weather immediately through set_weather_manual
+    # (which also parks the auto timer for 600 s, so the choice sticks).
+    _weather_step = (_weather_step + 1) % WEATHER_STEPS.size()
+    var s: Dictionary = WEATHER_STEPS[_weather_step]
+    if world != null and world.has_method("set_weather_manual"):
+        world.set_weather_manual(int(s["w"]), bool(s["storm"]))
+    _update_weather_button()
+    _notice(String(s["label"]))
+
+func _update_daynight_button() -> void:
+    # Label always shows the CURRENT state, so the tap does the other one.
+    if daynight_button == null:
+        return
+    var dn = world.get_node_or_null("DayNight")
+    var night := false
+    if dn != null and dn.has_method("is_night"):
+        night = dn.is_night()
+    _daynight_is_night = night
+    daynight_button.text = "🌙 NUIT" if night else "☀️ JOUR"
+
+func _toggle_daynight() -> void:
+    # v0.4.4: manual day/night switch. Sets the time through the
+    # DayNight system's own `t` variable — the auto-advance in
+    # daynight.gd keeps running from the new value, so nothing is
+    # held, forced, or duplicated. Night target is 0.86 (20:38, just
+    # PAST the 20:00 prayer window, so the jump does not trigger the
+    # adhan + gathering mid-test); day target is 0.4 (09:36).
+    var dn = world.get_node_or_null("DayNight")
+    if dn == null:
+        return
+    if dn.is_night():
+        dn.t = 0.4
+        _notice("☀️ Jour — 09:36")
+    else:
+        dn.t = 0.86
+        _notice("🌙 Nuit — 20:38")
+    _update_daynight_button()
 
 func _create_interface():
     var layer = CanvasLayer.new()
@@ -456,6 +548,30 @@ func _create_interface():
     objective.add_theme_font_size_override("font_size", 22)
     objective.add_theme_color_override("font_color", Color.YELLOW)
     layer.add_child(objective)
+
+    # v0.4.4: bottom-center control row — ONE compact row for the three
+    # diagnostic toggles, so they never cover the joystick (bottom-left)
+    # or the action buttons (right). It sits just ABOVE the radio log
+    # panel (which tops out 160 px above the bottom when it is open).
+    var bottom_row := HBoxContainer.new()
+    bottom_row.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+    bottom_row.position = Vector2(-255, -240)
+    bottom_row.custom_minimum_size = Vector2(510, 48)
+    bottom_row.add_theme_constant_override("separation", 10)
+    bottom_row.alignment = BoxContainer.ALIGNMENT_CENTER
+    layer.add_child(bottom_row)
+    daynight_button = _hud_button("☀️ JOUR", 150)
+    daynight_button.pressed.connect(_click_then.bind(_toggle_daynight))
+    bottom_row.add_child(daynight_button)
+    radio_bottom_button = _hud_button("📻 ON", 130)
+    radio_bottom_button.pressed.connect(_click_then.bind(_toggle_radio))
+    bottom_row.add_child(radio_bottom_button)
+    weather_button = _hud_button("🌦️ Clair", 180)
+    weather_button.pressed.connect(_click_then.bind(_cycle_weather))
+    bottom_row.add_child(weather_button)
+    _update_daynight_button()
+    _sync_radio_buttons()
+    _update_weather_button()
 
     notice = Label.new()
     notice.position = Vector2(18, 250)
@@ -531,14 +647,32 @@ func _create_interface():
     to_menu.pressed.connect(_click_then.bind(_to_main_menu))
     actions.add_child(to_menu)
 
+func _handle_back() -> void:
+    # Single choke point for the Android back button, whichever path
+    # delivered it (notification or ui_cancel key event — see
+    # _unhandled_input). The 300 ms guard stops one physical press
+    # from firing twice (open the pause menu AND immediately resume).
+    var now := Time.get_ticks_msec()
+    if now - _last_back_msec < 300:
+        return
+    _last_back_msec = now
+    if panel != null and panel.visible:
+        _resume_game()
+    else:
+        _open("MENU")
+
 func _notification(what: int) -> void:
     # Android back button: open the pause menu instead of closing the
     # game at once; a second press while the menu is open resumes.
     if what == NOTIFICATION_WM_GO_BACK_REQUEST:
-        if panel != null and panel.visible:
-            _resume_game()
-        else:
-            _open("MENU")
+        _handle_back()
+
+func _unhandled_input(event: InputEvent) -> void:
+    # v0.4.4: Android back ALSO arrives as the ui_cancel key event
+    # (KEY_ESCAPE). Handle both, deduped in _handle_back.
+    if event.is_action_pressed("ui_cancel"):
+        _handle_back()
+        get_viewport().set_input_as_handled()
 
 func _open(title: String):
     # RADIO is a live log, not a pause screen: it never pauses the game.
@@ -687,6 +821,23 @@ func interact():
 
 func _process(delta):
     _update_story()
+    # v0.4.4: keep the day/night button label in sync as time advances
+    # on its own (dawn / dusk flip the state without any tap).
+    var dn_sync = world.get_node_or_null("DayNight")
+    if dn_sync != null and dn_sync.has_method("is_night"):
+        var n_sync: bool = dn_sync.is_night()
+        if n_sync != _daynight_is_night:
+            _update_daynight_button()
+    # v0.4.4: keep the weather button in sync if the weather changed
+    # on its own (auto roll after a manual hold expires).
+    var wv = world.get("weather")
+    var sv = world.get("weather_storm")
+    if wv != null and sv != null:
+        var code: int = int(wv) * 2 + (1 if bool(sv) else 0)
+        if code != _weather_sync_code:
+            _weather_sync_code = code
+            _weather_step = _step_for_weather(int(wv), bool(sv))
+            _update_weather_button()
     if notice_time > 0.0:
         notice_time -= delta
         if notice_time <= 0.0:
